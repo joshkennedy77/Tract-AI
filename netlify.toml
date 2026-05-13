@@ -1,0 +1,9 @@
+# Netlify: static Vite app in /frontend (API is separate — see README notes in deploy logs)
+[build]
+  command = "npm ci && npm ci --prefix frontend && npm run build --prefix frontend"
+  publish = "frontend/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Vite is a devDependency; Netlify defaults to production installs that skip it
+  NPM_CONFIG_PRODUCTION = "false"
