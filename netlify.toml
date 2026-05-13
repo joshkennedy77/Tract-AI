@@ -1,4 +1,5 @@
-# Netlify: static Vite app in /frontend (API is separate — see README notes in deploy logs)
+# Netlify: static Vite app in /frontend. API is separate — set VITE_API_URL in the
+# Netlify UI (Environment variables) to your deployed API origin, then redeploy.
 [build]
   command = "npm ci && npm ci --prefix frontend && npm run build --prefix frontend"
   publish = "frontend/dist"

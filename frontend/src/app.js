@@ -6,18 +6,41 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+/** Netlify / production: set `VITE_API_URL` (e.g. https://your-api.railway.app) in build env. Local dev: omit — Vite proxies `/api` to port 3001. */
+const API_BASE = String(import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
+function apiUrl(path) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  if (!API_BASE) return p;
+  return `${API_BASE}${p}`;
+}
+
 async function fetchJson(url, options) {
   const res = await fetch(url, options);
   const text = await res.text();
+  const looksLikeHtml =
+    /^\s*</.test(text || "") &&
+    (text.includes("<!DOCTYPE") || text.includes("<html"));
   let body = null;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = { error: text || "Invalid JSON" };
+  if (!looksLikeHtml) {
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      body = { error: text?.slice(0, 200) || "Invalid JSON" };
+    }
   }
   if (!res.ok) {
-    const msg = body?.error || res.statusText || `HTTP ${res.status}`;
-    throw new Error(msg);
+    const msg = looksLikeHtml
+      ? `No API at this URL (${res.status}). On Netlify, set environment variable VITE_API_URL to your hosted API origin (no trailing slash), then redeploy.`
+      : body?.error || res.statusText || `HTTP ${res.status}`;
+    throw new Error(
+      typeof msg === "string" && msg.length > 400 ? `${msg.slice(0, 400)}…` : msg
+    );
+  }
+  if (looksLikeHtml) {
+    throw new Error(
+      "Unexpected HTML response. Set VITE_API_URL to your API server and redeploy."
+    );
   }
   return body;
 }
@@ -925,7 +948,7 @@ export function mount(root) {
     }
     if (el.auditSessionNote) el.auditSessionNote.classList.add("is-hidden");
     try {
-      const s = await fetchJson("/api/stats");
+      const s = await fetchJson(apiUrl("/api/stats"));
       applyStatsPayload(s, "db");
       showBanner("", "");
     } catch (e) {
@@ -982,7 +1005,7 @@ export function mount(root) {
     }
     if (el.recentActivityHint) el.recentActivityHint.textContent = "";
     try {
-      const { scans } = await fetchJson("/api/scans?limit=40");
+      const { scans } = await fetchJson(apiUrl("/api/scans?limit=40"));
       renderScanRows(scans);
     } catch (e) {
       el.scansBody.innerHTML = `<tr><td colspan="7" class="center err">${escapeHtml(e.message)}</td></tr>`;
@@ -996,7 +1019,7 @@ export function mount(root) {
     if (status) status.textContent = "";
     editor.innerHTML = `<p class="muted">Loading templates…</p>`;
     try {
-      const { templates } = await fetchJson("/api/prompt-templates");
+      const { templates } = await fetchJson(apiUrl("/api/prompt-templates"));
       editor.innerHTML = (templates || [])
         .map(
           (t, i) => `
@@ -1019,7 +1042,7 @@ export function mount(root) {
     }
     try {
       const { prompts } = await fetchJson(
-        `/api/prompts?brand=${encodeURIComponent(brand)}`
+        apiUrl(`/api/prompts?brand=${encodeURIComponent(brand)}`)
       );
       el.promptList.innerHTML = (prompts || [])
         .map((p) => `<li>${escapeHtml(p)}</li>`)
@@ -1045,7 +1068,7 @@ export function mount(root) {
     if (status) status.textContent = "Saving…";
     showBanner("", "");
     try {
-      await fetchJson("/api/prompt-templates", {
+      await fetchJson(apiUrl("/api/prompt-templates"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ templates }),
@@ -1132,7 +1155,7 @@ export function mount(root) {
     showBanner("", "");
 
     try {
-      const out = await fetchJson("/api/scan", {
+      const out = await fetchJson(apiUrl("/api/scan"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brands, engines }),
