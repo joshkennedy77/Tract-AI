@@ -52,6 +52,12 @@ function formatTime(iso) {
   return escapeHtml(d.toLocaleString());
 }
 
+function formatCount(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v < 0) return "—";
+  return v.toLocaleString();
+}
+
 function sentimentClass(s) {
   if (s === "positive") return "pill pill-pos";
   if (s === "negative") return "pill pill-neg";
@@ -277,11 +283,11 @@ export function mount(root) {
         <aside class="sidebar" aria-label="Sidebar">
           <div class="side-section-label">General</div>
           <ul class="side-nav">
+            <li><a href="#view-prompts" class="js-nav" data-view="prompts">${ICON.prompts} Prompts</a></li>
             <li>
               <a href="#view-brands" class="js-nav" data-view="brands">${ICON.brands} Run Audit <span class="badge" id="badge-brands">0</span></a>
             </li>
             <li><a href="#view-overview" class="js-nav is-active" data-view="overview">${ICON.overview} Test Results</a></li>
-            <li><a href="#view-prompts" class="js-nav" data-view="prompts">${ICON.prompts} Prompts</a></li>
             <li><a href="#view-sources" class="js-nav" data-view="sources">${ICON.sources} Sources</a></li>
           </ul>
           <div class="side-section-label">Project</div>
@@ -380,6 +386,44 @@ export function mount(root) {
                     <div class="metric-block-label">Top brand</div>
                     <div class="metric-block-value" id="ov-position" style="font-size:1.1rem">—</div>
                     <div class="metric-trend" id="ov-position-note">by volume</div>
+                  </div>
+                </div>
+              </div>
+              <div class="metric-card metric-card-sources">
+                <h3>Sources</h3>
+                <div class="metric-sources-inner">
+                  <div class="metric-sources-col">
+                    <div class="metric-block-label metric-label-with-help">
+                      Total sources cited
+                      <span
+                        class="metric-help"
+                        title="Sum of URLs or citations returned with each model answer (Perplexity search results, Gemini grounding links, OpenAI URL annotations when present)."
+                        aria-label="Help: total sources cited"
+                        role="img"
+                        >?</span>
+                    </div>
+                    <div class="metric-sources-value-row">
+                      <span class="metric-block-value metric-sources-main" id="ov-src-total">—</span>
+                      <span class="metric-src-pill metric-trend up" id="ov-src-total-pill">—</span>
+                    </div>
+                    <div class="metric-trend up" id="ov-src-total-sub">per answer</div>
+                  </div>
+                  <div class="metric-sources-divider" aria-hidden="true"></div>
+                  <div class="metric-sources-col">
+                    <div class="metric-block-label metric-label-with-help">
+                      Sources when brand mentioned
+                      <span
+                        class="metric-help"
+                        title="Same count, but only for answers where the audited brand was detected in the model reply."
+                        aria-label="Help: sources when brand mentioned"
+                        role="img"
+                        >?</span>
+                    </div>
+                    <div class="metric-sources-value-row">
+                      <span class="metric-block-value metric-sources-main" id="ov-src-mention">—</span>
+                      <span class="metric-src-pill metric-trend up" id="ov-src-mention-pill">—</span>
+                    </div>
+                    <div class="metric-trend up" id="ov-src-mention-sub">mention rows</div>
                   </div>
                 </div>
               </div>
@@ -498,6 +542,7 @@ export function mount(root) {
                     <th>Sentiment</th>
                     <th>Prompt</th>
                     <th>Response</th>
+                    <th>Sources</th>
                   </tr>
                 </thead>
                 <tbody id="scans-body"></tbody>
@@ -533,6 +578,12 @@ export function mount(root) {
     ovShareNote: root.querySelector("#ov-share-note"),
     ovPosition: root.querySelector("#ov-position"),
     ovPositionNote: root.querySelector("#ov-position-note"),
+    ovSrcTotal: root.querySelector("#ov-src-total"),
+    ovSrcTotalPill: root.querySelector("#ov-src-total-pill"),
+    ovSrcTotalSub: root.querySelector("#ov-src-total-sub"),
+    ovSrcMention: root.querySelector("#ov-src-mention"),
+    ovSrcMentionPill: root.querySelector("#ov-src-mention-pill"),
+    ovSrcMentionSub: root.querySelector("#ov-src-mention-sub"),
     chartVisibility: root.querySelector("#chart-visibility"),
     leaderboardBody: root.querySelector("#leaderboard-body"),
     badgeBrands: root.querySelector("#badge-brands"),
@@ -629,6 +680,16 @@ export function mount(root) {
         : out.brand
           ? [out.brand]
           : [];
+    const resultsThin = (out.results || []).map((r) => {
+      const sc =
+        r.source_count != null && r.source_count !== ""
+          ? Math.max(0, Number(r.source_count) || 0)
+          : Array.isArray(r.sources)
+            ? r.sources.length
+            : 0;
+      const { sources: _urls, ...rest } = r;
+      return { ...rest, source_count: sc };
+    });
     const snapshot = {
       at: Date.now(),
       brands,
@@ -638,7 +699,7 @@ export function mount(root) {
       scan_id: out.scan_id,
       persisted: !!out.persisted,
       engines: out.engines,
-      results: out.results,
+      results: resultsThin,
     };
     latestAuditMemory = snapshot;
     try {
@@ -678,6 +739,8 @@ export function mount(root) {
     const scanIds = new Set();
     const brandNames = new Set();
     let rowsWithCompetitors = 0;
+    let totalSourcesCited = 0;
+    let sourcesWhenBrandMentioned = 0;
 
     const perBrand = {};
     function ensurePB(b) {
@@ -727,6 +790,15 @@ export function mount(root) {
         pb.competitors += 1;
       }
 
+      const srcCount =
+        r.source_count != null && r.source_count !== ""
+          ? Math.max(0, Number(r.source_count) || 0)
+          : Array.isArray(r.sources)
+            ? r.sources.length
+            : 0;
+      totalSourcesCited += srcCount;
+      if (bm) sourcesWhenBrandMentioned += srcCount;
+
       if (r.scan_id) scanIds.add(r.scan_id);
     }
 
@@ -775,6 +847,11 @@ export function mount(root) {
       totalScans: n,
       uniqueScanBatches: scanIds.size || (n ? 1 : 0),
       uniqueBrandsTracked: brandNames.size,
+      rowsBrandMentioned: mentions,
+      totalSourcesCited,
+      sourcesWhenBrandMentioned,
+      avgSourcesPerAnswer:
+        n === 0 ? 0 : Math.round((totalSourcesCited / n) * 10) / 10,
       mentionRatePercent:
         n === 0 ? 0 : Math.round((mentions / n) * 100),
       competitorSignalPercent:
@@ -811,6 +888,12 @@ export function mount(root) {
         response: text,
         brand_mentioned: analysis.brand_mentioned,
         sentiment: analysis.sentiment,
+        source_count:
+          r.source_count != null && r.source_count !== ""
+            ? Math.max(0, Number(r.source_count) || 0)
+            : Array.isArray(r.sources)
+              ? r.sources.length
+              : 0,
       };
     });
   }
@@ -818,6 +901,7 @@ export function mount(root) {
   function applyStatsPayload(s, source) {
     const total = s.totalScans || 0;
     const mention = s.mentionRatePercent ?? 0;
+    const mentionRows = s.rowsBrandMentioned ?? 0;
     const batches = s.uniqueScanBatches ?? 0;
     const brandsN = s.uniqueBrandsTracked ?? 0;
     const compPct = s.competitorSignalPercent ?? 0;
@@ -847,6 +931,36 @@ export function mount(root) {
 
     el.ovShare.textContent = `${compPct}%`;
     el.ovShareNote.textContent = "competitor phrases";
+
+    const totalSrc = s.totalSourcesCited ?? 0;
+    const srcMention = s.sourcesWhenBrandMentioned ?? 0;
+    const avgAll = s.avgSourcesPerAnswer ?? 0;
+    el.ovSrcTotal.textContent = formatCount(totalSrc);
+    el.ovSrcMention.textContent = formatCount(srcMention);
+    if (total === 0) {
+      el.ovSrcTotalPill.textContent = "—";
+      el.ovSrcTotalPill.className = "metric-src-pill is-muted";
+      el.ovSrcTotalSub.textContent = "run a scan";
+      el.ovSrcMentionPill.textContent = "—";
+      el.ovSrcMentionPill.className = "metric-src-pill is-muted";
+      el.ovSrcMentionSub.textContent = "—";
+    } else {
+      el.ovSrcTotalPill.textContent = `avg ${avgAll}`;
+      el.ovSrcTotalPill.className = "metric-src-pill metric-trend up";
+      el.ovSrcTotalSub.textContent =
+        source === "session" ? "this audit" : "stored rows";
+      if (mentionRows > 0) {
+        const avgM =
+          Math.round((srcMention / mentionRows) * 10) / 10;
+        el.ovSrcMentionPill.textContent = `avg ${avgM}`;
+        el.ovSrcMentionPill.className = "metric-src-pill metric-trend up";
+        el.ovSrcMentionSub.textContent = `${mentionRows} mention answers`;
+      } else {
+        el.ovSrcMentionPill.textContent = "—";
+        el.ovSrcMentionPill.className = "metric-src-pill is-muted";
+        el.ovSrcMentionSub.textContent = "no mentions yet";
+      }
+    }
 
     const top = (s.topBrands || [])[0];
     el.ovPosition.textContent = top ? top.brand : "—";
@@ -961,7 +1075,7 @@ export function mount(root) {
 
   function renderScanRows(rows) {
     if (!rows || rows.length === 0) {
-      el.scansBody.innerHTML = `<tr><td colspan="7" class="muted center">No rows yet.</td></tr>`;
+      el.scansBody.innerHTML = `<tr><td colspan="8" class="muted center">No rows yet.</td></tr>`;
       return;
     }
     el.scansBody.innerHTML = rows
@@ -970,6 +1084,10 @@ export function mount(root) {
         const pr = escapeHtml((row.prompt || "").slice(0, 72));
         const mention = row.brand_mentioned ? "Yes" : "No";
         const sent = escapeHtml(row.sentiment || "—");
+        const srcN =
+          row.source_count != null && row.source_count !== ""
+            ? Math.max(0, Number(row.source_count) || 0)
+            : 0;
         const respRaw = String(row.response ?? row.preview ?? "").trim();
         const respInner = respRaw
           ? `<div class="response-cell-inner">${escapeHtml(respRaw)}</div>`
@@ -982,6 +1100,7 @@ export function mount(root) {
             <td><span class="${sentimentClass(row.sentiment)}">${sent}</span></td>
             <td class="prompt-cell" title="${escapeHtml(row.prompt || "")}">${pr}${(row.prompt || "").length > 72 ? "…" : ""}</td>
             <td class="response-cell">${respInner}</td>
+            <td class="nowrap center">${srcN}</td>
           </tr>`;
       })
       .join("");
@@ -1008,7 +1127,7 @@ export function mount(root) {
       const { scans } = await fetchJson(apiUrl("/api/scans?limit=40"));
       renderScanRows(scans);
     } catch (e) {
-      el.scansBody.innerHTML = `<tr><td colspan="7" class="center err">${escapeHtml(e.message)}</td></tr>`;
+      el.scansBody.innerHTML = `<tr><td colspan="8" class="center err">${escapeHtml(e.message)}</td></tr>`;
     }
   }
 

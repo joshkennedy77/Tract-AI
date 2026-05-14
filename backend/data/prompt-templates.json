@@ -1,9 +1,9 @@
 {
   "templates": [
-    "What is {{brand}} and what do they do? Short answer please.",
-    "Is {{brand}} a good option compared to competitors? Short answer please.",
+    "What is {{brand}} and what do they do? Short answer.",
+    "Is {{brand}} a good option compared to competitors? Short answer.",
     "What are people saying about {{brand}}? Short answer please.",
-    "Would you recommend {{brand}}? Why or why not? Short answer please.",
-    "What are the best alternatives to {{brand}}? Short answer please."
+    "Would you recommend {{brand}}? Why or why not? Short answer.",
+    "What are the best alternatives to {{brand}}? Short answer."
   ]
 }

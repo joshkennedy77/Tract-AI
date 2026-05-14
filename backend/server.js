@@ -49,6 +49,16 @@ function engineResponseText(raw) {
   return raw == null ? "" : String(raw);
 }
 
+/** URL / citation list from query.js `{ sources }` (Perplexity, Gemini grounding, OpenAI annotations, etc.). */
+function engineSources(raw) {
+  if (raw != null && typeof raw === "object" && Array.isArray(raw.sources)) {
+    return raw.sources
+      .map((s) => String(s == null ? "" : s).trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 /** Set `PERSIST_SCANS=true` in .env to write rows to Supabase. Default: off (dry run). */
 const PERSIST_SCANS =
   process.env.PERSIST_SCANS === "true" || process.env.PERSIST_SCANS === "1";
@@ -127,7 +137,7 @@ app.get("/api/stats", async (_req, res) => {
   const { data, error } = await supabase
     .from("scans")
     .select(
-      "brand, sentiment, brand_mentioned, engine, scan_id, competitors_mentioned"
+      "brand, sentiment, brand_mentioned, engine, scan_id, competitors_mentioned, source_count"
     );
 
   if (error) {
@@ -144,6 +154,8 @@ app.get("/api/stats", async (_req, res) => {
   const scanIds = new Set();
   const brandNames = new Set();
   let rowsWithCompetitors = 0;
+  let totalSourcesCited = 0;
+  let sourcesWhenBrandMentioned = 0;
 
   for (const row of rows) {
     if (row.brand_mentioned) mentions += 1;
@@ -166,6 +178,14 @@ app.get("/api/stats", async (_req, res) => {
 
     if (row.scan_id) scanIds.add(row.scan_id);
 
+    const sc =
+      row.source_count != null && row.source_count !== ""
+        ? Number(row.source_count)
+        : NaN;
+    const srcN = Number.isFinite(sc) && sc >= 0 ? sc : 0;
+    totalSourcesCited += srcN;
+    if (row.brand_mentioned) sourcesWhenBrandMentioned += srcN;
+
     const comp = row.competitors_mentioned;
     if (Array.isArray(comp) && comp.length > 0) rowsWithCompetitors += 1;
   }
@@ -183,6 +203,13 @@ app.get("/api/stats", async (_req, res) => {
     totalScans: rows.length,
     uniqueScanBatches: scanIds.size,
     uniqueBrandsTracked: brandNames.size,
+    rowsBrandMentioned: mentions,
+    totalSourcesCited,
+    sourcesWhenBrandMentioned,
+    avgSourcesPerAnswer:
+      rows.length === 0
+        ? 0
+        : Math.round((totalSourcesCited / rows.length) * 10) / 10,
     mentionRatePercent:
       rows.length === 0 ? 0 : Math.round((mentions / rows.length) * 100),
     competitorSignalPercent:
@@ -254,6 +281,8 @@ app.post("/api/scan", async (req, res) => {
         const { label, fn } = ENGINE_FNS[key];
         const raw = await fn(prompt);
         const responseText = engineResponseText(raw);
+        const sources = engineSources(raw);
+        const source_count = sources.length;
         const analysis = analyzeResponse(brand, responseText);
         const responseFull = responseText || "(No response)";
 
@@ -268,6 +297,8 @@ app.post("/api/scan", async (req, res) => {
             brand_mentioned: analysis.brand_mentioned,
             sentiment: analysis.sentiment,
             competitors_mentioned: analysis.competitors_mentioned,
+            sources,
+            source_count,
           });
         }
 
@@ -278,6 +309,8 @@ app.post("/api/scan", async (req, res) => {
           engine: label,
           prompt,
           response: responseFull,
+          source_count,
+          sources,
           ok: save.ok,
           persisted: PERSIST_SCANS,
           saveError: save.ok ? undefined : save.error,

@@ -20,6 +20,12 @@ async function saveResult(data) {
     };
   }
 
+  const sources = Array.isArray(data.sources) ? data.sources : [];
+  const sourceCount =
+    data.source_count != null && data.source_count !== ""
+      ? Math.max(0, Number(data.source_count) || 0)
+      : sources.length;
+
   const row = {
     scan_id: scanId,
     brand: data.brand,
@@ -29,6 +35,8 @@ async function saveResult(data) {
     brand_mentioned: data.brand_mentioned,
     sentiment: data.sentiment,
     competitors_mentioned: data.competitors_mentioned,
+    source_count: sourceCount,
+    sources,
   };
 
   const { error } = await supabase.from("scans").insert(row);
