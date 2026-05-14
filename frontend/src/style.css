@@ -255,6 +255,96 @@ a {
   letter-spacing: -0.02em;
 }
 
+.page-title-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.home-lead {
+  max-width: 42rem;
+  margin-top: 0;
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+
+.study-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.study-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius);
+  background: var(--white);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.study-card:hover {
+  border-color: var(--blue-500);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+}
+
+.study-card:focus-visible {
+  outline: 2px solid var(--blue-500);
+  outline-offset: 2px;
+}
+
+.study-card-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--slate-900);
+}
+
+.study-card-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--slate-500);
+  line-height: 1.45;
+}
+
+.study-card-badge {
+  display: inline-block;
+  margin-top: 0.65rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--blue-600);
+}
+
+.study-card-badge.is-db {
+  color: var(--slate-600);
+}
+
+.study-empty {
+  grid-column: 1 / -1;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--slate-500);
+  border: 1px dashed var(--slate-200);
+  border-radius: var(--radius);
+  background: var(--white);
+}
+
 .kpi-chips {
   display: flex;
   flex-wrap: wrap;

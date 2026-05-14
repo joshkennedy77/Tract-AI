@@ -256,13 +256,14 @@ const ICON = {
   sources: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/></svg>`,
   brands: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
   tags: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/></svg>`,
+  home: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
 };
 
 export function mount(root) {
   root.innerHTML = `
     <div class="app">
       <header class="topbar">
-        <a href="#view-overview" class="topbar-logo js-nav" data-view="overview" aria-label="Tract AI — Test Results">
+        <a href="#view-home" class="topbar-logo js-nav" data-view="home" aria-label="Tract AI — Home">
           <span class="topbar-logo-mark">T</span>
           Tract AI
         </a>
@@ -283,11 +284,12 @@ export function mount(root) {
         <aside class="sidebar" aria-label="Sidebar">
           <div class="side-section-label">General</div>
           <ul class="side-nav">
+            <li><a href="#view-home" class="js-nav is-active" data-view="home">${ICON.home} Home</a></li>
             <li><a href="#view-prompts" class="js-nav" data-view="prompts">${ICON.prompts} Prompts</a></li>
             <li>
               <a href="#view-brands" class="js-nav" data-view="brands">${ICON.brands} Run Audit <span class="badge" id="badge-brands">0</span></a>
             </li>
-            <li><a href="#view-overview" class="js-nav is-active" data-view="overview">${ICON.overview} Test Results</a></li>
+            <li><a href="#view-overview" class="js-nav" data-view="overview">${ICON.overview} Test Results</a></li>
             <li><a href="#view-sources" class="js-nav" data-view="sources">${ICON.sources} Sources</a></li>
           </ul>
           <div class="side-section-label">Project</div>
@@ -299,9 +301,26 @@ export function mount(root) {
         <div class="content">
           <p id="api-banner" class="banner banner-hidden" role="status"></p>
 
-          <section id="view-overview" class="view" data-view-panel="overview">
+          <section id="view-home" class="view" data-view-panel="home">
             <div class="page-title-row">
-              <h1 class="page-title">Test Results</h1>
+              <h1 class="page-title">Home</h1>
+            </div>
+            <p class="subview-lead home-lead">
+              Audits you have run appear here as studies. Click a card to open <strong>Test Results</strong> for that run. Login will land here later.
+            </p>
+            <div class="home-actions">
+              <a href="#view-prompts" class="btn-primary js-nav" data-view="prompts">Configure prompts</a>
+              <a href="#view-brands" class="btn-ghost js-nav" data-view="brands">Run new audit</a>
+            </div>
+            <div id="home-study-grid" class="study-card-grid" role="list"></div>
+          </section>
+
+          <section id="view-overview" class="view is-hidden" data-view-panel="overview">
+            <div class="page-title-row">
+              <div class="page-title-head">
+                <h1 class="page-title">Test Results</h1>
+                <a href="#view-home" class="btn-ghost js-nav" data-view="home">All studies</a>
+              </div>
               <div class="kpi-chips" id="ov-kpi-row">
                 <span class="kpi-chip"><span class="dot ok"></span> Visibility: —</span>
                 <span class="kpi-chip"><span class="dot warn"></span> Sentiment: —</span>
@@ -596,7 +615,12 @@ export function mount(root) {
     recentActivityHint: root.querySelector("#recent-activity-hint"),
   };
 
-  const views = ["overview", "prompts", "sources", "brands", "tags"];
+  /** Last `/api/scans` payload; used when opening a Supabase-backed study card. */
+  let homeScansCache = [];
+  /** Holds the latest or focused scan in this tab (see readLatestAudit). */
+  let latestAuditMemory = null;
+
+  const views = ["home", "overview", "prompts", "sources", "brands", "tags"];
 
   function showView(name) {
     views.forEach((v) => {
@@ -605,7 +629,9 @@ export function mount(root) {
       if (panel) panel.classList.toggle("is-hidden", v !== name);
       if (link) link.classList.toggle("is-active", v === name);
     });
-    if (name === "prompts") {
+    if (name === "home") {
+      renderHomeStudies();
+    } else if (name === "prompts") {
       loadPromptTemplatesEditor();
       refreshPrompts();
     } else if (name === "brands") {
@@ -625,7 +651,7 @@ export function mount(root) {
 
   const hash = (location.hash || "").replace("#view-", "");
   if (views.includes(hash)) showView(hash);
-  else showView("overview");
+  else showView("home");
 
   let promptTimer = null;
   let scanRunning = false;
@@ -655,9 +681,213 @@ export function mount(root) {
   }
 
   const AUDIT_STORAGE_KEY = "tract:last-audit";
+  const AUDIT_LIBRARY_KEY = "tract:audit-library";
+  const MAX_LIBRARY_STUDIES = 12;
 
-  /** Holds the latest scan in this tab so Recent activity always has full `response` text even if sessionStorage quota fails. */
-  let latestAuditMemory = null;
+  function readAuditLibrary() {
+    try {
+      const raw = sessionStorage.getItem(AUDIT_LIBRARY_KEY);
+      if (!raw) return {};
+      const o = JSON.parse(raw);
+      return o && typeof o === "object" ? o : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function writeAuditLibrary(lib) {
+    const entries = Object.entries(lib).sort(
+      (a, b) => (b[1].at || 0) - (a[1].at || 0)
+    );
+    const trimmed = Object.fromEntries(entries.slice(0, MAX_LIBRARY_STUDIES));
+    try {
+      sessionStorage.setItem(AUDIT_LIBRARY_KEY, JSON.stringify(trimmed));
+    } catch (e) {
+      console.warn("writeAuditLibrary:", e);
+    }
+  }
+
+  function saveAuditToLibrary(snapshot) {
+    const cid = snapshot.comparison_id;
+    if (!cid) return;
+    const lib = readAuditLibrary();
+    lib[cid] = snapshot;
+    writeAuditLibrary(lib);
+  }
+
+  function buildAuditSnapshotFromDbRows(rows, scanId) {
+    const sorted = [...rows].sort(
+      (a, b) =>
+        new Date(b.created_at || 0).getTime() -
+        new Date(a.created_at || 0).getTime()
+    );
+    const t0 = sorted[0]?.created_at
+      ? new Date(sorted[0].created_at).getTime()
+      : Date.now();
+    const brands = [...new Set(sorted.map((r) => r.brand).filter(Boolean))];
+    const engines = [...new Set(sorted.map((r) => r.engine).filter(Boolean))];
+    const results = sorted.map((row) => ({
+      brand: row.brand,
+      scan_id: row.scan_id || scanId,
+      engine: row.engine,
+      prompt: row.prompt,
+      response:
+        row.response != null && String(row.response).trim() !== ""
+          ? String(row.response)
+          : "",
+      analysis: {
+        brand_mentioned: !!row.brand_mentioned,
+        sentiment: row.sentiment,
+        competitors_mentioned: Array.isArray(row.competitors_mentioned)
+          ? row.competitors_mentioned
+          : [],
+      },
+      source_count:
+        row.source_count != null && row.source_count !== ""
+          ? Math.max(0, Number(row.source_count) || 0)
+          : 0,
+    }));
+    return {
+      at: t0,
+      brands,
+      brand: brands[0],
+      comparison_id: null,
+      scan_ids: [scanId],
+      scan_id: scanId,
+      persisted: true,
+      fromDb: true,
+      engines,
+      results,
+    };
+  }
+
+  function applyFocusedAudit(audit) {
+    if (!audit?.results?.length) return;
+    latestAuditMemory = audit;
+    try {
+      sessionStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(audit));
+    } catch (e) {
+      console.warn("applyFocusedAudit:", e);
+    }
+  }
+
+  async function renderHomeStudies() {
+    const grid = root.querySelector("#home-study-grid");
+    if (!grid) return;
+
+    let lib = readAuditLibrary();
+    if (Object.keys(lib).length === 0) {
+      try {
+        const raw = sessionStorage.getItem(AUDIT_STORAGE_KEY);
+        if (raw) {
+          const o = JSON.parse(raw);
+          if (o?.comparison_id && Array.isArray(o.results) && o.results.length) {
+            saveAuditToLibrary(o);
+            lib = readAuditLibrary();
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const browserStudies = Object.values(lib).sort(
+      (a, b) => (b.at || 0) - (a.at || 0)
+    );
+
+    let dbGroups = [];
+    try {
+      const { scans } = await fetchJson(apiUrl("/api/scans?limit=200"));
+      homeScansCache = Array.isArray(scans) ? scans : [];
+      const byScan = {};
+      for (const r of homeScansCache) {
+        const sid = r.scan_id != null ? String(r.scan_id) : "";
+        if (!sid) continue;
+        if (!byScan[sid]) byScan[sid] = [];
+        byScan[sid].push(r);
+      }
+      dbGroups = Object.entries(byScan)
+        .map(([scan_id, rows]) => ({
+          scan_id,
+          rows,
+          at: Math.max(
+            0,
+            ...rows.map((x) =>
+              x.created_at ? new Date(x.created_at).getTime() : 0
+            )
+          ),
+          brands: [...new Set(rows.map((x) => x.brand).filter(Boolean))],
+        }))
+        .sort((a, b) => b.at - a.at)
+        .slice(0, 24);
+    } catch {
+      homeScansCache = [];
+    }
+
+    if (browserStudies.length === 0 && dbGroups.length === 0) {
+      grid.innerHTML = `<div class="study-empty muted">No audits yet. Run an audit from <strong>Run Audit</strong>, then return here.</div>`;
+      return;
+    }
+
+    const parts = [];
+    for (const a of browserStudies) {
+      const brands =
+        a.brands?.length > 0 ? a.brands.join(", ") : a.brand || "Study";
+      const when = a.at ? new Date(a.at).toLocaleString() : "—";
+      const n = a.results?.length || 0;
+      const cid = escapeHtml(String(a.comparison_id || ""));
+      parts.push(`<button type="button" class="study-card js-open-study" data-origin="library" data-comparison-id="${cid}" role="listitem">
+      <h3 class="study-card-title">${escapeHtml(brands)}</h3>
+      <p class="study-card-meta">${escapeHtml(when)}<br />${n} answers</p>
+      <span class="study-card-badge">This browser</span>
+    </button>`);
+    }
+
+    for (const g of dbGroups) {
+      const when = g.at ? new Date(g.at).toLocaleString() : "—";
+      const brands =
+        g.brands.length > 0 ? g.brands.join(", ") : "Stored scan";
+      const sid = escapeHtml(g.scan_id);
+      const sidShort = escapeHtml(g.scan_id.slice(0, 8));
+      parts.push(`<button type="button" class="study-card js-open-study" data-origin="db" data-scan-id="${sid}" role="listitem">
+      <h3 class="study-card-title">${escapeHtml(brands)}</h3>
+      <p class="study-card-meta">${escapeHtml(when)}<br />${g.rows.length} stored rows</p>
+      <span class="study-card-badge is-db">Supabase · ${sidShort}…</span>
+    </button>`);
+    }
+
+    grid.innerHTML = parts.join("");
+  }
+
+  root.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".js-open-study");
+    if (!btn) return;
+    const origin = btn.getAttribute("data-origin");
+    if (origin === "library") {
+      const id = btn.getAttribute("data-comparison-id");
+      if (!id) return;
+      const audit = readAuditLibrary()[id];
+      if (!audit?.results?.length) return;
+      applyFocusedAudit(audit);
+      showView("overview");
+      history.replaceState(null, "", "#view-overview");
+      void refreshAll();
+      return;
+    }
+    if (origin === "db") {
+      const scanId = btn.getAttribute("data-scan-id");
+      if (!scanId) return;
+      const rows = (homeScansCache || []).filter(
+        (r) => String(r.scan_id || "") === scanId
+      );
+      if (!rows.length) return;
+      const audit = buildAuditSnapshotFromDbRows(rows, scanId);
+      applyFocusedAudit(audit);
+      showView("overview");
+      history.replaceState(null, "", "#view-overview");
+      void refreshAll();
+    }
+  });
 
   function readLatestAudit() {
     if (latestAuditMemory?.results?.length) return latestAuditMemory;
@@ -710,6 +940,7 @@ export function mount(root) {
         e
       );
     }
+    saveAuditToLibrary(snapshot);
   }
 
   function dominantSentiment(pb) {
@@ -1043,6 +1274,12 @@ export function mount(root) {
   async function loadStats() {
     const audit = readLatestAudit();
     if (audit?.results?.length) {
+      if (audit.fromDb) {
+        if (el.auditSessionNote) el.auditSessionNote.classList.add("is-hidden");
+        applyStatsPayload(statsFromAudit(audit), "db");
+        showBanner("", "");
+        return;
+      }
       if (el.auditSessionNote) {
         const nb =
           Array.isArray(audit.brands) && audit.brands.length > 0
