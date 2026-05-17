@@ -29,6 +29,7 @@ const {
   queryOpenAI,
   queryGemini,
   queryPerplexity,
+  getGeminiModelId,
 } = require("./query.js");
 const { analyzeResponse } = require("./analyze.js");
 const { saveResult } = require("./save.js");
@@ -156,6 +157,7 @@ app.get("/api/stats", async (_req, res) => {
   let rowsWithCompetitors = 0;
   let totalSourcesCited = 0;
   let sourcesWhenBrandMentioned = 0;
+  const engineSources = {};
 
   for (const row of rows) {
     if (row.brand_mentioned) mentions += 1;
@@ -186,9 +188,57 @@ app.get("/api/stats", async (_req, res) => {
     totalSourcesCited += srcN;
     if (row.brand_mentioned) sourcesWhenBrandMentioned += srcN;
 
+    if (!engineSources[e]) {
+      engineSources[e] = {
+        answers: 0,
+        totalSources: 0,
+        sourcesWhenMentioned: 0,
+        mentionRows: 0,
+      };
+    }
+    engineSources[e].answers += 1;
+    engineSources[e].totalSources += srcN;
+    if (row.brand_mentioned) {
+      engineSources[e].mentionRows += 1;
+      engineSources[e].sourcesWhenMentioned += srcN;
+    }
+
     const comp = row.competitors_mentioned;
     if (Array.isArray(comp) && comp.length > 0) rowsWithCompetitors += 1;
   }
+
+  const perBrandStats = {};
+  const brandsOrder = [];
+  const brandsOrderSeen = new Set();
+  for (const row of rows) {
+    const raw = String(row.brand || "").trim();
+    if (raw) {
+      const k = raw.toLowerCase();
+      if (!brandsOrderSeen.has(k)) {
+        brandsOrderSeen.add(k);
+        brandsOrder.push(raw);
+      }
+    }
+    const b = raw || "(unknown)";
+    if (!perBrandStats[b]) perBrandStats[b] = { total: 0, mentions: 0 };
+    perBrandStats[b].total += 1;
+    if (row.brand_mentioned) perBrandStats[b].mentions += 1;
+  }
+  const brandComparison = brandsOrder
+    .concat(
+      Object.keys(perBrandStats).filter(
+        (b) => !brandsOrder.some((x) => x.toLowerCase() === b.toLowerCase())
+      )
+    )
+    .map((brand) => {
+      const pb = perBrandStats[brand] || { total: 0, mentions: 0 };
+      return {
+        brand,
+        count: pb.total,
+        mentionRatePercent:
+          pb.total === 0 ? 0 : Math.round((pb.mentions / pb.total) * 100),
+      };
+    });
 
   const engineMentionRates = Object.entries(engineMention)
     .map(([engine, { total, mentions: m }]) => ({
@@ -198,6 +248,24 @@ app.get("/api/stats", async (_req, res) => {
         total === 0 ? 0 : Math.round((m / total) * 100),
     }))
     .sort((a, b) => b.total - a.total);
+
+  const sourcesByEngine = Object.entries(engineSources)
+    .map(([engine, es]) => ({
+      engine,
+      answers: es.answers,
+      totalSources: es.totalSources,
+      sourcesWhenMentioned: es.sourcesWhenMentioned,
+      mentionRows: es.mentionRows,
+      avgSourcesPerAnswer:
+        es.answers === 0
+          ? 0
+          : Math.round((es.totalSources / es.answers) * 10) / 10,
+      avgSourcesWhenMentioned:
+        es.mentionRows === 0
+          ? 0
+          : Math.round((es.sourcesWhenMentioned / es.mentionRows) * 10) / 10,
+    }))
+    .sort((a, b) => b.totalSources - a.totalSources);
 
   res.json({
     totalScans: rows.length,
@@ -217,14 +285,22 @@ app.get("/api/stats", async (_req, res) => {
         ? 0
         : Math.round((rowsWithCompetitors / rows.length) * 100),
     sentimentCounts,
-    topBrands: Object.entries(byBrand)
-      .sort((a, b) => b[1] - a[1])
+    topBrands: brandComparison
+      .slice()
+      .sort((a, b) => b.mentionRatePercent - a.mentionRatePercent)
       .slice(0, 5)
-      .map(([brand, count]) => ({ brand, count })),
+      .map((x) => ({
+        brand: x.brand,
+        count: x.count,
+        mentionRatePercent: x.mentionRatePercent,
+      })),
+    brandsOrder,
     enginesUsed: Object.entries(byEngine)
       .sort((a, b) => b[1] - a[1])
       .map(([engine, count]) => ({ engine, count })),
     engineMentionRates,
+    brandComparison,
+    sourcesByEngine,
   });
 });
 
@@ -281,15 +357,24 @@ app.post("/api/scan", async (req, res) => {
         const { label, fn } = ENGINE_FNS[key];
         const raw = await fn(prompt);
         const responseText = engineResponseText(raw);
+        const engineError =
+          raw != null && typeof raw === "object" && raw.error
+            ? String(raw.error)
+            : undefined;
         const sources = engineSources(raw);
         const source_count = sources.length;
         const analysis = analyzeResponse(brand, responseText);
-        const responseFull = responseText || "(No response)";
+        const responseFull = responseText
+          ? responseText
+          : engineError
+            ? `[${label} error] ${engineError.slice(0, 400)}`
+            : "(No response)";
 
         let save = { ok: true };
         if (PERSIST_SCANS) {
           save = await saveResult({
             scan_id: scanRunId,
+            comparison_id: comparisonId,
             brand,
             engine: label,
             prompt,
@@ -314,8 +399,9 @@ app.post("/api/scan", async (req, res) => {
           ok: save.ok,
           persisted: PERSIST_SCANS,
           saveError: save.ok ? undefined : save.error,
+          engineError,
           analysis,
-          preview: responseText.slice(0, 320),
+          preview: (responseText || responseFull).slice(0, 320),
         });
       }
     }
@@ -330,6 +416,14 @@ app.post("/api/scan", async (req, res) => {
       ].slice(0, 5)
     : [];
 
+  const engineErrors = [
+    ...new Set(
+      results
+        .filter((r) => r.engineError)
+        .map((r) => `${r.engine}: ${r.engineError}`)
+    ),
+  ].slice(0, 5);
+
   res.json({
     brands: brandsList,
     brand: brandsList[0],
@@ -341,6 +435,7 @@ app.post("/api/scan", async (req, res) => {
     saved,
     total: results.length,
     saveErrors,
+    engineErrors,
     results,
   });
 });
@@ -354,6 +449,7 @@ const server = app.listen(PORT, "127.0.0.1", () => {
   console.log(
     `Prompt templates: ${path.join(__dirname, "data", "prompt-templates.json")} (or GET/PUT /api/prompt-templates)`
   );
+  console.log(`Gemini model: ${getGeminiModelId()} (override with GEMINI_MODEL in .env)`);
 });
 
 server.requestTimeout = 15 * 60 * 1000;

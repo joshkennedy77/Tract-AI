@@ -1,4 +1,5 @@
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const { Anthropic } = require("@anthropic-ai/sdk");
 const { OpenAI } = require("openai");
@@ -10,14 +11,10 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
 
+/** Default must be a model available to new Google AI Studio keys (2.0-flash 404s). */
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
-const geminiModelName =
-  process.env.GEMINI_MODEL?.trim() || "gemini-2.0-flash";
-const geminiGenAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const geminiModel = geminiGenAI.getGenerativeModel({
-  model: geminiModelName,
-  generationConfig: { maxOutputTokens: 512 },
-});
 
 const GEMINI_GROUNDING =
   process.env.GEMINI_GROUNDING === "true" ||
@@ -28,6 +25,33 @@ function getOpenAIClient() {
   if (!OPENAI_API_KEY) return null;
   if (!openaiClient) openaiClient = new OpenAI({ apiKey: OPENAI_API_KEY });
   return openaiClient;
+}
+
+function getGeminiModelId() {
+  const fromEnv = process.env.GEMINI_MODEL?.trim();
+  if (fromEnv) return fromEnv;
+  return DEFAULT_GEMINI_MODEL;
+}
+
+/** Recreate model when GEMINI_MODEL env changes (avoids stale cache after code deploy). */
+let geminiModelCached = null;
+let geminiModelCachedId = null;
+
+function getGeminiModel() {
+  const key = GEMINI_API_KEY?.trim();
+  if (!key) return null;
+
+  const modelId = getGeminiModelId();
+  if (!geminiModelCached || geminiModelCachedId !== modelId) {
+    const genAI = new GoogleGenerativeAI(key);
+    geminiModelCached = genAI.getGenerativeModel({
+      model: modelId,
+      generationConfig: { maxOutputTokens: 512 },
+    });
+    geminiModelCachedId = modelId;
+    console.log(`Gemini: using model ${modelId}`);
+  }
+  return geminiModelCached;
 }
 
 function anthropicText(message) {
@@ -64,6 +88,43 @@ function extractGeminiSources(result) {
     if (uri) urls.push(String(uri));
   }
   return [...new Set(urls)];
+}
+
+function extractGeminiText(result) {
+  const res = result?.response;
+  if (!res) return null;
+
+  if (typeof res.text === "function") {
+    try {
+      const t = res.text();
+      if (t != null) {
+        const s = String(t).trim();
+        if (s) return s;
+      }
+    } catch {
+      /* fall through to parts */
+    }
+  }
+
+  const candidates = res.candidates;
+  if (!Array.isArray(candidates)) return null;
+
+  for (const cand of candidates) {
+    const parts = cand?.content?.parts;
+    if (!Array.isArray(parts)) continue;
+    const chunks = [];
+    for (const p of parts) {
+      if (p && typeof p.text === "string" && p.text) chunks.push(p.text);
+    }
+    const joined = chunks.join("").trim();
+    if (joined) return joined;
+  }
+
+  return null;
+}
+
+function geminiFail(message) {
+  return { text: null, sources: [], error: message };
 }
 
 async function queryAnthropic(prompt) {
@@ -114,22 +175,42 @@ async function queryOpenAI(prompt) {
 }
 
 async function queryGemini(prompt) {
+  const userText = String(prompt ?? "");
   try {
-    const useGrounding = GEMINI_GROUNDING;
-    const request = useGrounding
-      ? {
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          tools: [{ googleSearchRetrieval: {} }],
-        }
-      : prompt;
+    const model = getGeminiModel();
+    if (!model) {
+      const msg = "GEMINI_API_KEY is not set";
+      console.error("Gemini API error:", msg);
+      return geminiFail(msg);
+    }
 
-    const result = await geminiModel.generateContent(request);
-    const text = result.response.text();
+    let result;
+    if (GEMINI_GROUNDING) {
+      result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: userText }] }],
+        tools: [{ googleSearchRetrieval: {} }],
+      });
+    } else {
+      // Same as SDK docs: pass the prompt string directly (matches OpenAI user message).
+      result = await model.generateContent(userText);
+    }
+
+    const text = extractGeminiText(result);
     const sources = extractGeminiSources(result);
+
+    if (text == null) {
+      const fr = result?.response?.candidates?.[0]?.finishReason;
+      const msg =
+        fr != null ? `empty response (finishReason: ${fr})` : "empty response";
+      console.error("Gemini API error:", msg);
+      return geminiFail(msg);
+    }
+
     return { text, sources };
   } catch (err) {
-    console.error("Gemini API error:", err.message || err);
-    return { text: null, sources: [] };
+    const msg = err.message || String(err);
+    console.error("Gemini API error:", msg);
+    return geminiFail(msg);
   }
 }
 
@@ -178,4 +259,6 @@ module.exports = {
   queryOpenAI,
   queryGemini,
   queryPerplexity,
+  getGeminiModelId,
+  DEFAULT_GEMINI_MODEL,
 };

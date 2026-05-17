@@ -269,6 +269,16 @@ a {
   margin-top: 0;
 }
 
+.home-tagline {
+  margin: 0 0 0.5rem;
+  max-width: 36rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--slate-900);
+  letter-spacing: -0.02em;
+}
+
 .home-actions {
   display: flex;
   flex-wrap: wrap;
@@ -749,6 +759,61 @@ a {
   height: auto;
   min-height: 140px;
   padding: 0.35rem 0 0.5rem;
+}
+
+
+.visibility-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.visibility-bar-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 12rem) 1fr auto;
+  gap: 0.65rem 0.75rem;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.visibility-bar-label {
+  font-weight: 600;
+  color: var(--slate-800);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visibility-bar-track {
+  height: 22px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--slate-100);
+  border: 1px solid var(--slate-200);
+}
+
+.visibility-bar-fill {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  min-width: 0;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  border-radius: 5px;
+}
+
+.visibility-bar-tip {
+  padding: 0 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--white);
+}
+
+.visibility-bar-value {
+  font-weight: 700;
+  color: var(--slate-800);
+  font-size: 0.78rem;
+  white-space: nowrap;
 }
 
 .sentiment-bars {

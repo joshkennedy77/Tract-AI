@@ -28,6 +28,9 @@ async function saveResult(data) {
 
   const row = {
     scan_id: scanId,
+    ...(data.comparison_id
+      ? { comparison_id: String(data.comparison_id) }
+      : {}),
     brand: data.brand,
     engine: data.engine,
     prompt: data.prompt,

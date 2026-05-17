@@ -31,7 +31,9 @@ async function fetchJson(url, options) {
   }
   if (!res.ok) {
     const msg = looksLikeHtml
-      ? `No API at this URL (${res.status}). On Netlify, set environment variable VITE_API_URL to your hosted API origin (no trailing slash), then redeploy.`
+      ? API_BASE
+        ? `No API at this URL (${res.status}). Check VITE_API_URL and redeploy.`
+        : `No API at this URL (${res.status}). Run \`npm run api\` (port 3001), open the app at http://localhost:3000 (not 3001), and free port 3000 if Vite cannot start.`
       : body?.error || res.statusText || `HTTP ${res.status}`;
     throw new Error(
       typeof msg === "string" && msg.length > 400 ? `${msg.slice(0, 400)}…` : msg
@@ -39,7 +41,9 @@ async function fetchJson(url, options) {
   }
   if (looksLikeHtml) {
     throw new Error(
-      "Unexpected HTML response. Set VITE_API_URL to your API server and redeploy."
+      API_BASE
+        ? "Unexpected HTML response. Check VITE_API_URL and redeploy."
+        : "Unexpected HTML from /api — use http://localhost:3000 with `npm run dev` and `npm run api` on 3001 (do not open the Vite URL if it moved to port 3001)."
     );
   }
   return body;
@@ -56,6 +60,66 @@ function formatCount(n) {
   const v = Number(n);
   if (!Number.isFinite(v) || v < 0) return "—";
   return v.toLocaleString();
+}
+
+/** Match row.brand to an entry in the audit brand list (case-insensitive). */
+function resolveBrandName(raw, brandsOrder) {
+  const order = Array.isArray(brandsOrder) ? brandsOrder : [];
+  const s = String(raw ?? "").trim();
+  if (!s) return order[0] || "(unknown)";
+  const lower = s.toLowerCase();
+  const hit = order.find((b) => String(b).toLowerCase() === lower);
+  return hit || s;
+}
+
+/** Unique brand names in first-seen order from scan rows. */
+function brandsFromRowsOrdered(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const r of rows || []) {
+    const b = String(r.brand || "").trim();
+    if (!b) continue;
+    const k = b.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(b);
+  }
+  return out;
+}
+
+/** Audit brand order first, then any extra names found in rows. */
+function mergeBrandsOrder(hint, rows) {
+  const fromRows = brandsFromRowsOrdered(rows);
+  const out = [];
+  const seen = new Set();
+  for (const b of hint || []) {
+    const t = String(b || "").trim();
+    if (!t) continue;
+    const match =
+      fromRows.find((r) => r.toLowerCase() === t.toLowerCase()) || t;
+    const k = match.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(match);
+  }
+  for (const b of fromRows) {
+    const k = b.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(b);
+  }
+  return out;
+}
+
+function emptyPerBrandStats() {
+  return {
+    total: 0,
+    mentions: 0,
+    positive: 0,
+    negative: 0,
+    neutral: 0,
+    competitors: 0,
+  };
 }
 
 function sentimentClass(s) {
@@ -76,119 +140,125 @@ function brandInitials(name) {
   return String(name || "?").slice(0, 2).toUpperCase();
 }
 
-function renderVisibilityChart(mentionPct) {
-  const w = 400;
-  const h = 120;
-  const pad = 12;
-  const pts = [];
-  for (let i = 0; i < 7; i++) {
-    const v = Math.max(
-      8,
-      Math.min(92, mentionPct + Math.sin(i * 1.1) * 14 + (i - 3) * 2)
-    );
-    pts.push(v);
-  }
-  const n = pts.length - 1;
-  const pathD = pts
-    .map((v, i) => {
-      const x = pad + (i / n) * (w - pad * 2);
-      const y = pad + (1 - v / 100) * (h - pad * 2);
-      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const areaD = `${pathD} L ${(w - pad).toFixed(1)} ${h - pad} L ${pad} ${h - pad} Z`;
-  return `
-    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.25"/>
-          <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <path d="${areaD}" fill="url(#chartFill)" />
-      <path d="${pathD}" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-    </svg>
-  `;
-}
-
-/** Multi-line visibility-style chart when comparing brands (trend around each brand's mention %). */
-function renderVisibilityMultiBrand(brandComparison, overallMention) {
-  const rows = (brandComparison || []).filter((b) => b && b.brand);
-  if (rows.length <= 1) {
-    const m =
-      rows[0]?.mentionRatePercent != null
-        ? rows[0].mentionRatePercent
-        : overallMention;
-    return renderVisibilityChart(m);
-  }
-
-  const w = 400;
-  const h = 160;
-  const padL = 40;
-  const padR = 12;
-  const padT = 14;
-  const padB = 12;
-  const gw = w - padL - padR;
-  const gh = h - padT - padB;
-  const days = 7;
-  const n = days - 1;
-
-  function yForPct(pct) {
-    return padT + (1 - Math.min(100, Math.max(0, pct)) / 100) * gh;
-  }
-  function xForDay(i) {
-    return padL + (i / n) * gw;
-  }
-
-  let grid = "";
-  for (const pct of [0, 25, 50, 75, 100]) {
-    const y = yForPct(pct);
-    grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${(w - padR).toFixed(1)}" y2="${y.toFixed(1)}" stroke="#e2e8f0" stroke-dasharray="3 4" stroke-width="1" />`;
-    grid += `<text x="${padL - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#64748b">${pct}%</text>`;
-  }
-
-  let paths = "";
-  rows.forEach((row, bi) => {
-    const center = row.mentionRatePercent ?? 0;
-    const hue = hashHue(row.brand);
-    const stroke = `hsl(${hue} 70% 42%)`;
-    const pts = [];
-    for (let k = 0; k < days; k++) {
-      const v = Math.max(
-        4,
-        Math.min(
-          96,
-          center + Math.sin(k * 1.05 + bi * 0.45) * 14 + (k - 3) * 2.5
-        )
-      );
-      pts.push(v);
-    }
-    const d = pts
-      .map((v, i) => {
-        const x = xForDay(i);
-        const y = yForPct(v);
-        return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(" ");
-    paths += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
-  });
-
-  const legend = rows
+/** Horizontal bars from real mention-rate % (not a synthetic time series). */
+function renderVisibilityBarRows(barRows) {
+  return barRows
     .map((row) => {
-      const hue = hashHue(row.brand);
-      const stroke = `hsl(${hue} 70% 42%)`;
-      return `<span class="chart-legend-item"><span class="chart-legend-swatch" style="background:${stroke}"></span>${escapeHtml(row.brand)} (${row.mentionRatePercent}%)</span>`;
+      const pct = Math.min(100, Math.max(0, Number(row.pct) || 0));
+      const label = escapeHtml(row.label || "—");
+      const meta = row.meta ? escapeHtml(row.meta) : "";
+      const width = pct > 0 ? Math.max(pct, 4) : 0;
+      const tip = pct >= 14 ? `${pct}%` : "";
+      return `<div class="visibility-bar-row">
+        <span class="visibility-bar-label" title="${label}">${label}</span>
+        <div class="visibility-bar-track" role="img" aria-label="${label}: ${pct}% visibility">
+          <div class="visibility-bar-fill" style="width:${width}%"><span class="visibility-bar-tip">${tip}</span></div>
+        </div>
+        <span class="visibility-bar-value" title="${meta}">${pct}%${meta ? ` <span class="muted">· ${meta}</span>` : ""}</span>
+      </div>`;
     })
     .join("");
+}
 
-  return `
-    <p class="chart-caption muted">Illustrative trend around each brand's mention rate for this audit (not a historical time series).</p>
-    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="chart-svg-main" aria-hidden="true">
-      ${grid}
-      ${paths}
-    </svg>
-    <div class="chart-legend">${legend}</div>
-  `;
+/** Visibility chart: per-brand rates when comparing brands; otherwise per AI platform. */
+function renderVisibilityChart(stats) {
+  const brandComparison = (stats?.brandComparison || []).filter((b) => b && b.brand);
+  const engineMentionRates = (stats?.engineMentionRates || []).filter(
+    (e) => e && e.engine
+  );
+  const overallMention = stats?.mentionRatePercent ?? 0;
+
+  if (brandComparison.length > 1) {
+    const order = stats?.brandsOrder || brandComparison.map((b) => b.brand);
+    const byKey = new Map(
+      brandComparison.map((b) => [String(b.brand).toLowerCase(), b])
+    );
+    const sorted = [];
+    const seen = new Set();
+    for (const name of order) {
+      const row = byKey.get(String(name).toLowerCase());
+      if (!row || seen.has(String(row.brand).toLowerCase())) continue;
+      seen.add(String(row.brand).toLowerCase());
+      sorted.push(row);
+    }
+    for (const row of brandComparison) {
+      const k = String(row.brand).toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        sorted.push(row);
+      }
+    }
+    return `
+      <p class="chart-caption muted">Brand visibility: share of model answers that mentioned each brand in this dataset.</p>
+      <div class="visibility-bars">
+        ${renderVisibilityBarRows(
+          sorted.map((b) => ({
+            label: b.brand,
+            pct: b.mentionRatePercent ?? 0,
+            meta: `${b.count ?? 0} answers`,
+          }))
+        )}
+      </div>
+    `;
+  }
+
+  if (engineMentionRates.length > 0) {
+    const sorted = engineMentionRates
+      .slice()
+      .sort(
+        (a, b) => (b.mentionRatePercent ?? 0) - (a.mentionRatePercent ?? 0)
+      );
+    const brandLabel =
+      brandComparison.length === 1 ? brandComparison[0].brand : null;
+    const caption = brandLabel
+      ? `Visibility for <strong>${escapeHtml(brandLabel)}</strong>: share of answers per AI platform that mentioned the brand.`
+      : "Visibility by AI platform: share of answers that mentioned the audited brand.";
+    return `
+      <p class="chart-caption muted">${caption}</p>
+      <div class="visibility-bars">
+        ${renderVisibilityBarRows(
+          sorted.map((e) => ({
+            label: e.engine,
+            pct: e.mentionRatePercent ?? 0,
+            meta: `${e.total ?? 0} answers`,
+          }))
+        )}
+      </div>
+    `;
+  }
+
+  if (brandComparison.length === 1) {
+    const b = brandComparison[0];
+    return `
+      <p class="chart-caption muted">Overall brand mention rate for this dataset.</p>
+      <div class="visibility-bars">
+        ${renderVisibilityBarRows([
+          {
+            label: b.brand,
+            pct: b.mentionRatePercent ?? overallMention,
+            meta: `${b.count ?? 0} answers`,
+          },
+        ])}
+      </div>
+    `;
+  }
+
+  if (overallMention > 0 || stats?.totalScans > 0) {
+    return `
+      <p class="chart-caption muted">Overall brand mention rate across all stored answers.</p>
+      <div class="visibility-bars">
+        ${renderVisibilityBarRows([
+          {
+            label: "Overall",
+            pct: overallMention,
+            meta: `${stats?.rowsBrandMentioned ?? 0} / ${stats?.totalScans ?? 0} rows`,
+          },
+        ])}
+      </div>
+    `;
+  }
+
+  return `<p class="muted chart-caption">No visibility data yet. Run an audit to see mention rates.</p>`;
 }
 
 /** Stacked horizontal bars: share of positive / neutral / negative answers per brand. */
@@ -263,9 +333,9 @@ export function mount(root) {
   root.innerHTML = `
     <div class="app">
       <header class="topbar">
-        <a href="#view-home" class="topbar-logo js-nav" data-view="home" aria-label="Tract AI — Home">
+        <a href="#view-home" class="topbar-logo js-nav" data-view="home" aria-label="Tract — Home">
           <span class="topbar-logo-mark">T</span>
-          Tract AI
+          Tract
         </a>
         <div class="topbar-account" title="Wire to your workspace later">
           <span class="topbar-account-label">Accounts</span>
@@ -305,12 +375,12 @@ export function mount(root) {
             <div class="page-title-row">
               <h1 class="page-title">Home</h1>
             </div>
+            <p class="home-tagline">How AI sees your brand. How you improve it.</p>
             <p class="subview-lead home-lead">
               Audits you have run appear here as studies. Click a card to open <strong>Test Results</strong> for that run. Login will land here later.
             </p>
             <div class="home-actions">
-              <a href="#view-prompts" class="btn-primary js-nav" data-view="prompts">Configure prompts</a>
-              <a href="#view-brands" class="btn-ghost js-nav" data-view="brands">Run new audit</a>
+              <a href="#view-brands" class="btn-primary js-nav" data-view="brands">Run new audit</a>
             </div>
             <div id="home-study-grid" class="study-card-grid" role="list"></div>
           </section>
@@ -350,7 +420,7 @@ export function mount(root) {
 
             <div class="alert-banner">
               Audits are shown in Test Results after each run. By default rows are <strong>not</strong> saved to Supabase; set <code>PERSIST_SCANS=true</code> on the API to store them.
-              <a href="#view-brands">Open Run Audit</a>
+              <a href="#view-brands" class="js-nav" data-view="brands">Open Run Audit</a>
             </div>
 
             <div class="filter-row">
@@ -450,7 +520,7 @@ export function mount(root) {
 
             <div class="ai-strip">
               <span>✨ Summary uses your <strong>latest audit</strong> in this browser when present; otherwise stored <code>scans</code> from the database.</span>
-              <a href="#view-prompts">View prompts</a>
+              <a href="#view-prompts" class="js-nav" data-view="prompts">View prompts</a>
             </div>
 
             <div class="bottom-grid">
@@ -649,9 +719,16 @@ export function mount(root) {
     });
   });
 
-  const hash = (location.hash || "").replace("#view-", "");
-  if (views.includes(hash)) showView(hash);
-  else showView("home");
+  function syncViewFromHash() {
+    const raw = (location.hash || "").replace(/^#\/?/, "");
+    const name = raw.replace(/^view-/, "").split("/")[0];
+    if (views.includes(name)) showView(name);
+    else showView("home");
+  }
+
+  window.addEventListener("hashchange", syncViewFromHash);
+
+  syncViewFromHash();
 
   let promptTimer = null;
   let scanRunning = false;
@@ -715,7 +792,7 @@ export function mount(root) {
     writeAuditLibrary(lib);
   }
 
-  function buildAuditSnapshotFromDbRows(rows, scanId) {
+  function buildAuditSnapshotFromDbRows(rows, meta = {}) {
     const sorted = [...rows].sort(
       (a, b) =>
         new Date(b.created_at || 0).getTime() -
@@ -724,11 +801,20 @@ export function mount(root) {
     const t0 = sorted[0]?.created_at
       ? new Date(sorted[0].created_at).getTime()
       : Date.now();
-    const brands = [...new Set(sorted.map((r) => r.brand).filter(Boolean))];
+    const brands = mergeBrandsOrder(meta.brands || [], sorted);
+    const comparisonId =
+      meta.comparison_id ||
+      sorted.find((r) => r.comparison_id)?.comparison_id ||
+      null;
+    const scanIds = [
+      ...new Set(
+        sorted.map((r) => r.scan_id).filter((id) => id != null && id !== "")
+      ),
+    ];
     const engines = [...new Set(sorted.map((r) => r.engine).filter(Boolean))];
     const results = sorted.map((row) => ({
       brand: row.brand,
-      scan_id: row.scan_id || scanId,
+      scan_id: row.scan_id || meta.scan_id,
       engine: row.engine,
       prompt: row.prompt,
       response:
@@ -751,9 +837,9 @@ export function mount(root) {
       at: t0,
       brands,
       brand: brands[0],
-      comparison_id: null,
-      scan_ids: [scanId],
-      scan_id: scanId,
+      comparison_id: comparisonId,
+      scan_ids: scanIds.length ? scanIds : meta.scan_id ? [meta.scan_id] : [],
+      scan_id: scanIds[0] || meta.scan_id,
       persisted: true,
       fromDb: true,
       engines,
@@ -799,25 +885,36 @@ export function mount(root) {
     try {
       const { scans } = await fetchJson(apiUrl("/api/scans?limit=200"));
       homeScansCache = Array.isArray(scans) ? scans : [];
-      const byScan = {};
+      const byGroup = {};
       for (const r of homeScansCache) {
+        const cid =
+          r.comparison_id != null && String(r.comparison_id).trim() !== ""
+            ? String(r.comparison_id)
+            : "";
         const sid = r.scan_id != null ? String(r.scan_id) : "";
-        if (!sid) continue;
-        if (!byScan[sid]) byScan[sid] = [];
-        byScan[sid].push(r);
+        const gid = cid || (sid ? `scan:${sid}` : "");
+        if (!gid) continue;
+        if (!byGroup[gid]) byGroup[gid] = [];
+        byGroup[gid].push(r);
       }
-      dbGroups = Object.entries(byScan)
-        .map(([scan_id, rows]) => ({
-          scan_id,
-          rows,
-          at: Math.max(
-            0,
-            ...rows.map((x) =>
-              x.created_at ? new Date(x.created_at).getTime() : 0
-            )
-          ),
-          brands: [...new Set(rows.map((x) => x.brand).filter(Boolean))],
-        }))
+      dbGroups = Object.entries(byGroup)
+        .map(([group_id, rows]) => {
+          const comparison_id = rows[0]?.comparison_id || null;
+          const scan_id = rows[0]?.scan_id != null ? String(rows[0].scan_id) : "";
+          return {
+            group_id,
+            comparison_id,
+            scan_id,
+            rows,
+            at: Math.max(
+              0,
+              ...rows.map((x) =>
+                x.created_at ? new Date(x.created_at).getTime() : 0
+              )
+            ),
+            brands: mergeBrandsOrder([], rows),
+          };
+        })
         .sort((a, b) => b.at - a.at)
         .slice(0, 24);
     } catch {
@@ -848,8 +945,9 @@ export function mount(root) {
       const brands =
         g.brands.length > 0 ? g.brands.join(", ") : "Stored scan";
       const sid = escapeHtml(g.scan_id);
+      const cid = g.comparison_id ? escapeHtml(String(g.comparison_id)) : "";
       const sidShort = escapeHtml(g.scan_id.slice(0, 8));
-      parts.push(`<button type="button" class="study-card js-open-study" data-origin="db" data-scan-id="${sid}" role="listitem">
+      parts.push(`<button type="button" class="study-card js-open-study" data-origin="db" data-scan-id="${sid}"${cid ? ` data-comparison-id="${cid}"` : ""} role="listitem">
       <h3 class="study-card-title">${escapeHtml(brands)}</h3>
       <p class="study-card-meta">${escapeHtml(when)}<br />${g.rows.length} stored rows</p>
       <span class="study-card-badge is-db">Supabase · ${sidShort}…</span>
@@ -875,13 +973,24 @@ export function mount(root) {
       return;
     }
     if (origin === "db") {
+      const comparisonId = btn.getAttribute("data-comparison-id");
       const scanId = btn.getAttribute("data-scan-id");
-      if (!scanId) return;
-      const rows = (homeScansCache || []).filter(
-        (r) => String(r.scan_id || "") === scanId
-      );
+      let rows = [];
+      if (comparisonId) {
+        rows = (homeScansCache || []).filter(
+          (r) => String(r.comparison_id || "") === comparisonId
+        );
+      } else if (scanId) {
+        rows = (homeScansCache || []).filter(
+          (r) => String(r.scan_id || "") === scanId
+        );
+      }
       if (!rows.length) return;
-      const audit = buildAuditSnapshotFromDbRows(rows, scanId);
+      const audit = buildAuditSnapshotFromDbRows(rows, {
+        scan_id: scanId,
+        comparison_id: comparisonId || null,
+        brands: mergeBrandsOrder([], rows),
+      });
       applyFocusedAudit(audit);
       showView("overview");
       history.replaceState(null, "", "#view-overview");
@@ -972,7 +1081,6 @@ export function mount(root) {
     let rowsWithCompetitors = 0;
     let totalSourcesCited = 0;
     let sourcesWhenBrandMentioned = 0;
-
     const perBrand = {};
     function ensurePB(b) {
       const key = b || "(unknown)";
@@ -991,7 +1099,7 @@ export function mount(root) {
 
     for (const r of results) {
       const analysis = r.analysis || {};
-      const rowBrand = r.brand || brandsOrder[0] || "(unknown)";
+      const rowBrand = resolveBrandName(r.brand, brandsOrder);
       const pb = ensurePB(rowBrand);
       pb.total += 1;
 
@@ -1041,15 +1149,13 @@ export function mount(root) {
       }))
       .sort((a, b) => b.total - a.total);
 
-    const orderedKeys = [
-      ...brandsOrder.filter((b) => perBrand[b]),
-      ...Object.keys(perBrand).filter((b) => !brandsOrder.includes(b)),
-    ];
+    const orderedKeys = mergeBrandsOrder(brandsOrder, results);
 
     const brandComparison = orderedKeys.map((b) => {
-      const pb = perBrand[b];
+      const key = resolveBrandName(b, brandsOrder);
+      const pb = perBrand[key] || emptyPerBrandStats();
       return {
-        brand: b,
+        brand: key,
         count: pb.total,
         mentionRatePercent:
           pb.total === 0 ? 0 : Math.round((pb.mentions / pb.total) * 100),
@@ -1090,6 +1196,7 @@ export function mount(root) {
       sentimentCounts,
       topBrands,
       brandComparison,
+      brandsOrder: orderedKeys.map((b) => resolveBrandName(b, brandsOrder)),
       enginesUsed: Object.entries(byEngine)
         .sort((a, b) => b[1] - a[1])
         .map(([engine, count]) => ({ engine, count })),
@@ -1213,7 +1320,7 @@ export function mount(root) {
 
     const bc = s.brandComparison || [];
 
-    el.chartVisibility.innerHTML = renderVisibilityMultiBrand(bc, mention);
+    el.chartVisibility.innerHTML = renderVisibilityChart(s);
     const chartSent = root.querySelector("#chart-sentiment");
     if (chartSent) {
       chartSent.innerHTML = renderSentimentByBrandChart(bc, s.sentimentCounts);
@@ -1531,6 +1638,12 @@ export function mount(root) {
             : "Check API logs and Supabase.";
         showBanner(`Some rows failed: ${hint}`, "warn");
       }
+      if (Array.isArray(out.engineErrors) && out.engineErrors.length > 0) {
+        showBanner(
+          `Some engines returned errors: ${out.engineErrors.join(" · ")}`,
+          "warn"
+        );
+      }
       await refreshAll();
     } catch (e) {
       el.scanStatus.textContent = "";
@@ -1550,5 +1663,6 @@ export function mount(root) {
   });
 
   refreshPrompts();
+  void loadPromptTemplatesEditor();
   refreshAll();
 }

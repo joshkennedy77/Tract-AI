@@ -4,9 +4,9 @@ export default defineConfig({
   base: "./",
   server: {
     host: true,
-    port: 4000,
-    /** Prefer 4000; if something is still bound there, try the next port instead of failing. */
-    strictPort: false,
+    port: 3000,
+    /** Must stay on 3000 — API uses 3001; falling back to 3001 breaks the /api proxy. */
+    strictPort: true,
     proxy: {
       "/api": {
         target: "http://127.0.0.1:3001",
@@ -16,8 +16,8 @@ export default defineConfig({
   },
   preview: {
     host: true,
-    port: 4173,
-    strictPort: false,
+    port: 3000,
+    strictPort: true,
     proxy: {
       "/api": {
         target: "http://127.0.0.1:3001",
