@@ -4,23 +4,23 @@ export default defineConfig({
   base: "./",
   server: {
     host: true,
-    port: 3000,
-    /** Must stay on 3000 — API uses 3001; falling back to 3001 breaks the /api proxy. */
+    port: 3010,
+    /** Must stay on 3010 — API uses 3011; falling back to 3011 breaks the /api proxy. */
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:3001",
+        target: "http://127.0.0.1:3011",
         changeOrigin: true,
       },
     },
   },
   preview: {
     host: true,
-    port: 3000,
+    port: 3010,
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:3001",
+        target: "http://127.0.0.1:3011",
         changeOrigin: true,
       },
     },

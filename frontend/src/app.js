@@ -1,3 +1,5 @@
+import { supabase, currentAccessToken } from "./supabase.js";
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -15,8 +17,11 @@ function apiUrl(path) {
   return `${API_BASE}${p}`;
 }
 
-async function fetchJson(url, options) {
-  const res = await fetch(url, options);
+async function fetchJson(url, options = {}) {
+  const token = await currentAccessToken();
+  const headers = new Headers(options.headers || {});
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(url, { ...options, headers });
   const text = await res.text();
   const looksLikeHtml =
     /^\s*</.test(text || "") &&
@@ -327,19 +332,54 @@ const ICON = {
   brands: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
   tags: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/></svg>`,
   home: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+  team: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  tract: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M15 9h.01M9 13h.01M15 13h.01M9 17h.01M15 17h.01"/></svg>`,
 };
 
 export function mount(root) {
   root.innerHTML = `
     <div class="app">
+      <div id="auth-gate" class="auth-gate" aria-live="polite">
+        <div class="auth-card" role="dialog" aria-labelledby="auth-title">
+          <div class="auth-logo"><span class="topbar-logo-mark">T</span> Tract</div>
+
+          <div id="auth-loading" class="auth-loading">Checking session…</div>
+
+          <div id="auth-signin-mode" class="is-hidden">
+            <h1 id="auth-title" class="auth-title">Sign in</h1>
+            <p class="auth-sub">Use the email a Tract admin invited you with.</p>
+            <form id="auth-signin-form" class="auth-form">
+              <label class="auth-field">
+                <span>Email</span>
+                <input type="email" id="auth-email" autocomplete="email" required />
+              </label>
+              <label class="auth-field">
+                <span>Password</span>
+                <input type="password" id="auth-password" autocomplete="current-password" required />
+              </label>
+              <button type="submit" class="btn-primary" id="auth-submit">Sign in</button>
+            </form>
+          </div>
+
+          <div id="auth-nocompany-mode" class="is-hidden">
+            <h1 class="auth-title">No company yet</h1>
+            <p>You're signed in as <strong id="auth-nocompany-email">—</strong>, but you don't belong to a company yet.</p>
+            <p class="muted">Ask a Tract admin or your company admin to add you, then refresh.</p>
+            <button type="button" class="btn-ghost" id="btn-signout-empty">Sign out</button>
+          </div>
+
+          <p id="auth-error" class="auth-error is-hidden" role="alert"></p>
+        </div>
+      </div>
+
       <header class="topbar">
         <a href="#view-home" class="topbar-logo js-nav" data-view="home" aria-label="Tract — Home">
           <span class="topbar-logo-mark">T</span>
           Tract
         </a>
-        <div class="topbar-account" title="Wire to your workspace later">
-          <span class="topbar-account-label">Accounts</span>
-          <span class="topbar-account-value">tract.ai / demo</span>
+        <div class="topbar-account" id="topbar-account" title="Signed-in account">
+          <span class="topbar-account-label">Company</span>
+          <span class="topbar-account-value" id="topbar-company">—</span>
         </div>
         <div class="topbar-search-wrap">
           <label class="topbar-search">
@@ -347,7 +387,10 @@ export function mount(root) {
             <input type="search" placeholder="Search" autocomplete="off" />
           </label>
         </div>
-        <div class="topbar-avatar" title="Profile" role="img" aria-label="User"></div>
+        <div class="topbar-user" id="topbar-user">
+          <span class="topbar-user-email" id="topbar-email">—</span>
+          <button type="button" class="btn-ghost btn-sm" id="btn-signout">Sign out</button>
+        </div>
       </header>
 
       <div class="shell">
@@ -365,6 +408,18 @@ export function mount(root) {
           <div class="side-section-label">Project</div>
           <ul class="side-nav">
             <li><a href="#view-tags" class="js-nav" data-view="tags">${ICON.tags} Tags</a></li>
+          </ul>
+          <div id="side-admin-label" class="side-section-label is-hidden">Admin</div>
+          <ul class="side-nav">
+            <li id="nav-team-li" class="is-hidden">
+              <a href="#view-team" class="js-nav" data-view="team">${ICON.team} Team</a>
+            </li>
+          </ul>
+          <div id="side-tract-label" class="side-section-label is-hidden">Tract</div>
+          <ul class="side-nav">
+            <li id="nav-tract-admin-li" class="is-hidden">
+              <a href="#view-tract-admin" class="js-nav" data-view="tract-admin">${ICON.tract} Companies</a>
+            </li>
           </ul>
         </aside>
 
@@ -645,6 +700,86 @@ export function mount(root) {
             <div class="placeholder-card">No tags yet.</div>
           </section>
 
+          <section id="view-tract-admin" class="view is-hidden" data-view-panel="tract-admin">
+            <div class="page-title-row">
+              <h1 class="page-title">Companies</h1>
+            </div>
+            <p class="subview-lead">Tract-internal view. Provision new enterprise customers and manage existing ones.</p>
+
+            <div class="panel-card team-invite-card">
+              <h3 style="margin-top:0">Create a new company</h3>
+              <form id="tract-create-form" class="tract-create-form">
+                <input type="text" id="tract-create-name" placeholder="Company name" autocomplete="off" required />
+                <input type="email" id="tract-create-email" placeholder="First admin email" autocomplete="off" required />
+                <button type="submit" class="btn-primary" id="tract-create-btn">Create</button>
+              </form>
+              <p id="tract-create-status" class="field-hint muted"></p>
+            </div>
+
+            <div class="panel-card">
+              <h3 style="margin-top:0">All companies</h3>
+              <div class="table-wrap">
+                <table class="data-table tract-companies-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Plan</th>
+                      <th>Members</th>
+                      <th>Scans</th>
+                      <th>Last activity</th>
+                      <th>Status</th>
+                      <th style="text-align:right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tract-companies-body">
+                    <tr><td colspan="7" class="muted">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section id="view-team" class="view is-hidden" data-view-panel="team">
+            <div class="page-title-row">
+              <h1 class="page-title">Team</h1>
+            </div>
+            <p class="subview-lead">Manage the people in your company. Employees can run audits and see all results; admins can additionally invite and remove members.</p>
+
+            <div class="panel-card team-invite-card">
+              <h3 style="margin-top:0">Invite an employee</h3>
+              <form id="team-invite-form" class="team-invite-form">
+                <input
+                  type="email"
+                  id="team-invite-email"
+                  placeholder="name@company.com"
+                  autocomplete="off"
+                  required
+                />
+                <button type="submit" class="btn-primary" id="team-invite-btn">Send invite</button>
+              </form>
+              <p id="team-invite-status" class="field-hint muted"></p>
+            </div>
+
+            <div class="panel-card">
+              <h3 style="margin-top:0">Members</h3>
+              <div class="table-wrap">
+                <table class="data-table team-table">
+                  <thead>
+                    <tr>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Joined</th>
+                      <th style="text-align:right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="team-members-body">
+                    <tr><td colspan="4" class="muted">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
           <p class="footer-mini">Tract AI · run <code>npm run api</code> for live data</p>
         </div>
       </div>
@@ -690,7 +825,7 @@ export function mount(root) {
   /** Holds the latest or focused scan in this tab (see readLatestAudit). */
   let latestAuditMemory = null;
 
-  const views = ["home", "overview", "prompts", "sources", "brands", "tags"];
+  const views = ["home", "overview", "prompts", "sources", "brands", "tags", "team", "tract-admin"];
 
   function showView(name) {
     views.forEach((v) => {
@@ -706,6 +841,10 @@ export function mount(root) {
       refreshPrompts();
     } else if (name === "brands") {
       refreshPrompts();
+    } else if (name === "team") {
+      loadTeamMembers();
+    } else if (name === "tract-admin") {
+      loadTractCompanies();
     }
   }
 
@@ -727,8 +866,6 @@ export function mount(root) {
   }
 
   window.addEventListener("hashchange", syncViewFromHash);
-
-  syncViewFromHash();
 
   let promptTimer = null;
   let scanRunning = false;
@@ -1662,7 +1799,385 @@ export function mount(root) {
     }
   });
 
-  refreshPrompts();
-  void loadPromptTemplatesEditor();
-  refreshAll();
+  // ------- Auth bootstrap -------
+  const gate = root.querySelector("#auth-gate");
+  const gateLoading = root.querySelector("#auth-loading");
+  const gateSignin = root.querySelector("#auth-signin-mode");
+  const gateNoCompany = root.querySelector("#auth-nocompany-mode");
+  const gateError = root.querySelector("#auth-error");
+
+  function showGateMode(mode) {
+    gateLoading.classList.toggle("is-hidden", mode !== "loading");
+    gateSignin.classList.toggle("is-hidden", mode !== "signin");
+    gateNoCompany.classList.toggle("is-hidden", mode !== "no-company");
+    gate.classList.remove("is-hidden");
+  }
+
+  function setGateError(msg) {
+    if (!msg) {
+      gateError.classList.add("is-hidden");
+      gateError.textContent = "";
+      return;
+    }
+    gateError.textContent = msg;
+    gateError.classList.remove("is-hidden");
+  }
+
+  let currentUser = null;
+
+  function revealAdminNav(isAdmin) {
+    root
+      .querySelector("#side-admin-label")
+      .classList.toggle("is-hidden", !isAdmin);
+    root
+      .querySelector("#nav-team-li")
+      .classList.toggle("is-hidden", !isAdmin);
+  }
+
+  function paintTopbarUser(user) {
+    const emailEl = root.querySelector("#topbar-email");
+    const companyEl = root.querySelector("#topbar-company");
+    if (emailEl) emailEl.textContent = user?.email || "";
+    if (companyEl) {
+      companyEl.textContent = user?.tract_role
+        ? `Tract · ${user.tract_role}`
+        : user?.company_id
+          ? "Your company"
+          : "—";
+    }
+    revealAdminNav(user?.company_role === "admin");
+    revealTractNav(!!user?.tract_role);
+  }
+
+  function revealTractNav(isStaff) {
+    root
+      .querySelector("#side-tract-label")
+      .classList.toggle("is-hidden", !isStaff);
+    root
+      .querySelector("#nav-tract-admin-li")
+      .classList.toggle("is-hidden", !isStaff);
+  }
+
+  // ------- Team view (PR-2) -------
+  function renderTeamRow(member) {
+    const email = escapeHtml(member.email || "—");
+    const role = member.role === "admin" ? "admin" : "employee";
+    const joined = formatTime(member.joined_at);
+    const isSelf =
+      currentUser && member.user_id && member.user_id === currentUser.id;
+    const promoteLabel = role === "admin" ? "Make employee" : "Make admin";
+    const promoteRole = role === "admin" ? "employee" : "admin";
+    return `<tr data-member-id="${escapeHtml(member.id)}">
+      <td>${email}${isSelf ? ' <span class="muted">(you)</span>' : ""}</td>
+      <td><span class="role-pill role-${role}">${role}</span></td>
+      <td>${joined}</td>
+      <td style="text-align:right">
+        <button type="button" class="btn-ghost btn-sm js-team-role" data-role="${promoteRole}">${promoteLabel}</button>
+        <button type="button" class="btn-ghost btn-sm js-team-remove"${isSelf ? ' disabled title="You can\'t remove yourself"' : ""}>Remove</button>
+      </td>
+    </tr>`;
+  }
+
+  async function loadTeamMembers() {
+    const body = root.querySelector("#team-members-body");
+    if (!body) return;
+    body.innerHTML = `<tr><td colspan="4" class="muted">Loading…</td></tr>`;
+    try {
+      const out = await fetchJson(apiUrl("/api/company/members"));
+      const members = Array.isArray(out?.members) ? out.members : [];
+      if (members.length === 0) {
+        body.innerHTML = `<tr><td colspan="4" class="muted">No members yet.</td></tr>`;
+        return;
+      }
+      body.innerHTML = members.map(renderTeamRow).join("");
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="4" class="muted">Failed to load: ${escapeHtml(e.message)}</td></tr>`;
+    }
+  }
+
+  async function doInvite(ev) {
+    ev.preventDefault();
+    const input = root.querySelector("#team-invite-email");
+    const status = root.querySelector("#team-invite-status");
+    const btn = root.querySelector("#team-invite-btn");
+    const email = (input.value || "").trim();
+    if (!email) return;
+    status.textContent = "Sending invite…";
+    btn.disabled = true;
+    try {
+      const out = await fetchJson(apiUrl("/api/company/employees"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      status.textContent = out.invitedFresh
+        ? `Invite sent to ${email}.`
+        : `${email} already had an account — added to your company.`;
+      input.value = "";
+      loadTeamMembers();
+    } catch (e) {
+      status.textContent = `Failed: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function handleTeamClick(ev) {
+    const tr = ev.target.closest("tr[data-member-id]");
+    if (!tr) return;
+    const memberId = tr.getAttribute("data-member-id");
+
+    if (ev.target.classList.contains("js-team-role")) {
+      const newRole = ev.target.getAttribute("data-role");
+      ev.target.disabled = true;
+      try {
+        await fetchJson(apiUrl(`/api/company/members/${memberId}`), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: newRole }),
+        });
+        loadTeamMembers();
+      } catch (e) {
+        ev.target.disabled = false;
+        showBanner(`Role change failed: ${e.message}`, "err");
+      }
+      return;
+    }
+
+    if (ev.target.classList.contains("js-team-remove")) {
+      if (!confirm("Remove this member from the company?")) return;
+      ev.target.disabled = true;
+      try {
+        await fetchJson(apiUrl(`/api/company/members/${memberId}`), {
+          method: "DELETE",
+        });
+        loadTeamMembers();
+      } catch (e) {
+        ev.target.disabled = false;
+        showBanner(`Remove failed: ${e.message}`, "err");
+      }
+    }
+  }
+
+  root.querySelector("#team-invite-form").addEventListener("submit", doInvite);
+  root
+    .querySelector("#team-members-body")
+    .addEventListener("click", handleTeamClick);
+
+  // ------- Tract-admin view (PR-3) -------
+  function renderTractCompanyRow(c) {
+    const isDeactivated = !!c.deactivated_at;
+    const statusPill = isDeactivated
+      ? '<span class="role-pill role-employee">Deactivated</span>'
+      : '<span class="role-pill role-admin">Active</span>';
+    const last = c.last_activity ? formatTime(c.last_activity) : "—";
+    const toggleLabel = isDeactivated ? "Reactivate" : "Deactivate";
+    const toggleAction = isDeactivated ? "reactivate" : "deactivate";
+    return `<tr data-company-id="${escapeHtml(c.id)}">
+      <td>${escapeHtml(c.name)}<br><span class="muted" style="font-size:11px">${escapeHtml(c.slug || "—")}</span></td>
+      <td>${escapeHtml(c.plan || "—")}</td>
+      <td>${formatCount(c.member_count)}</td>
+      <td>${formatCount(c.scan_count)}</td>
+      <td>${last}</td>
+      <td>${statusPill}</td>
+      <td style="text-align:right">
+        <button type="button" class="btn-ghost btn-sm js-tract-add-admin">Add admin</button>
+        <button type="button" class="btn-ghost btn-sm js-tract-toggle" data-action="${toggleAction}">${toggleLabel}</button>
+      </td>
+    </tr>`;
+  }
+
+  async function loadTractCompanies() {
+    const body = root.querySelector("#tract-companies-body");
+    if (!body) return;
+    body.innerHTML = `<tr><td colspan="7" class="muted">Loading…</td></tr>`;
+    try {
+      const out = await fetchJson(apiUrl("/api/internal/companies"));
+      const companies = Array.isArray(out?.companies) ? out.companies : [];
+      if (companies.length === 0) {
+        body.innerHTML = `<tr><td colspan="7" class="muted">No companies yet.</td></tr>`;
+        return;
+      }
+      body.innerHTML = companies.map(renderTractCompanyRow).join("");
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="7" class="muted">Failed to load: ${escapeHtml(e.message)}</td></tr>`;
+    }
+  }
+
+  async function doCreateCompany(ev) {
+    ev.preventDefault();
+    const nameEl = root.querySelector("#tract-create-name");
+    const emailEl = root.querySelector("#tract-create-email");
+    const status = root.querySelector("#tract-create-status");
+    const btn = root.querySelector("#tract-create-btn");
+    const name = (nameEl.value || "").trim();
+    const adminEmail = (emailEl.value || "").trim();
+    if (!name || !adminEmail) return;
+    status.textContent = "Creating…";
+    btn.disabled = true;
+    try {
+      const out = await fetchJson(apiUrl("/api/internal/companies"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, adminEmail }),
+      });
+      status.textContent = out.invitedFresh
+        ? `Created "${out.company.name}". Invite sent to ${adminEmail}.`
+        : `Created "${out.company.name}". ${adminEmail} already had an account — added as admin.`;
+      nameEl.value = "";
+      emailEl.value = "";
+      loadTractCompanies();
+    } catch (e) {
+      status.textContent = `Failed: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function handleTractRowClick(ev) {
+    const tr = ev.target.closest("tr[data-company-id]");
+    if (!tr) return;
+    const companyId = tr.getAttribute("data-company-id");
+
+    if (ev.target.classList.contains("js-tract-add-admin")) {
+      const email = prompt("Admin email to add:");
+      if (!email) return;
+      ev.target.disabled = true;
+      try {
+        const out = await fetchJson(
+          apiUrl(`/api/internal/companies/${companyId}/admins`),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email.trim() }),
+          }
+        );
+        const note = out.alreadyAdmin
+          ? "Already an admin."
+          : out.promoted
+            ? "Promoted existing member to admin."
+            : out.invitedFresh
+              ? "Invite sent."
+              : "Existing account added as admin.";
+        showBanner(note, "");
+        loadTractCompanies();
+      } catch (e) {
+        showBanner(`Add admin failed: ${e.message}`, "err");
+      } finally {
+        ev.target.disabled = false;
+      }
+      return;
+    }
+
+    if (ev.target.classList.contains("js-tract-toggle")) {
+      const action = ev.target.getAttribute("data-action");
+      if (
+        action === "deactivate" &&
+        !confirm("Deactivate this company? Members keep their accounts but the company is marked inactive.")
+      )
+        return;
+      ev.target.disabled = true;
+      try {
+        await fetchJson(
+          apiUrl(`/api/internal/companies/${companyId}/${action}`),
+          { method: "POST" }
+        );
+        loadTractCompanies();
+      } catch (e) {
+        ev.target.disabled = false;
+        showBanner(`${action} failed: ${e.message}`, "err");
+      }
+    }
+  }
+
+  root
+    .querySelector("#tract-create-form")
+    .addEventListener("submit", doCreateCompany);
+  root
+    .querySelector("#tract-companies-body")
+    .addEventListener("click", handleTractRowClick);
+
+  async function doSignOut() {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      location.reload();
+    }
+  }
+
+  root
+    .querySelector("#auth-signin-form")
+    .addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      setGateError("");
+      const email = root.querySelector("#auth-email").value.trim();
+      const password = root.querySelector("#auth-password").value;
+      const btn = root.querySelector("#auth-submit");
+      btn.disabled = true;
+      const prevLabel = btn.textContent;
+      btn.textContent = "Signing in…";
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+      if (error) {
+        setGateError(error.message);
+        return;
+      }
+      // Re-run mount cleanly after sign-in.
+      location.reload();
+    });
+
+  root.querySelector("#btn-signout").addEventListener("click", doSignOut);
+  root
+    .querySelector("#btn-signout-empty")
+    .addEventListener("click", doSignOut);
+
+  async function bootstrap() {
+    showGateMode("loading");
+    let session = null;
+    try {
+      const { data } = await supabase.auth.getSession();
+      session = data?.session || null;
+    } catch (e) {
+      setGateError(`Auth error: ${e.message || e}`);
+      showGateMode("signin");
+      return;
+    }
+
+    if (!session) {
+      showGateMode("signin");
+      return;
+    }
+
+    let me;
+    try {
+      me = await fetchJson(apiUrl("/api/auth/me"));
+    } catch (e) {
+      // Token invalid or API unreachable — fall back to sign-in.
+      setGateError(`Could not verify session: ${e.message || e}`);
+      showGateMode("signin");
+      return;
+    }
+
+    const user = me?.user;
+    if (!user?.company_id) {
+      root.querySelector("#auth-nocompany-email").textContent =
+        user?.email || "—";
+      showGateMode("no-company");
+      return;
+    }
+
+    currentUser = user;
+    paintTopbarUser(user);
+    gate.classList.add("is-hidden");
+    syncViewFromHash();
+    refreshPrompts();
+    void loadPromptTemplatesEditor();
+    refreshAll();
+  }
+
+  bootstrap();
 }

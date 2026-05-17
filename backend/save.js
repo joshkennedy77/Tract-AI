@@ -31,6 +31,8 @@ async function saveResult(data) {
     ...(data.comparison_id
       ? { comparison_id: String(data.comparison_id) }
       : {}),
+    ...(data.company_id ? { company_id: String(data.company_id) } : {}),
+    ...(data.created_by ? { created_by: String(data.created_by) } : {}),
     brand: data.brand,
     engine: data.engine,
     prompt: data.prompt,

@@ -1300,3 +1300,177 @@ a {
     margin: 0;
   }
 }
+
+/* —— Auth gate (sign-in / no-company) —— */
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  background: rgba(248, 250, 252, 0.97);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.auth-card {
+  background: var(--white, #fff);
+  border: 1px solid var(--slate-200, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  width: 100%;
+  max-width: 380px;
+  padding: 28px 26px 24px;
+}
+.auth-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 18px;
+  color: var(--slate-700, #334155);
+}
+.auth-title {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.auth-sub {
+  margin: 0 0 18px;
+  color: var(--slate-500, #64748b);
+  font-size: 13px;
+}
+.auth-loading {
+  padding: 8px 0;
+  color: var(--slate-500, #64748b);
+  font-size: 13px;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--slate-600, #475569);
+  font-weight: 500;
+}
+.auth-field input {
+  font: inherit;
+  font-size: 14px;
+  padding: 9px 11px;
+  border: 1px solid var(--slate-300, #cbd5e1);
+  border-radius: 8px;
+  background: var(--white, #fff);
+  color: var(--slate-900, #0f172a);
+}
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--brand-600, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.auth-error {
+  margin: 12px 0 0;
+  color: #b42318;
+  font-size: 13px;
+}
+.auth-empty,
+#auth-nocompany-mode {
+  font-size: 14px;
+}
+#auth-nocompany-mode p {
+  margin: 0 0 10px;
+}
+#auth-nocompany-mode .btn-ghost {
+  margin-top: 6px;
+}
+
+/* —— Topbar user / sign-out —— */
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.topbar-user-email {
+  font-size: 13px;
+  color: var(--slate-600, #475569);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* —— Team view (PR-2) —— */
+.team-invite-card { padding: 16px; }
+.team-invite-form {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin: 8px 0 4px;
+}
+.team-invite-form input[type="email"] {
+  flex: 1;
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 11px;
+  border: 1px solid var(--slate-300, #cbd5e1);
+  border-radius: 8px;
+  background: var(--white, #fff);
+}
+.team-invite-form input[type="email"]:focus {
+  outline: none;
+  border-color: var(--brand-600, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.team-table td, .team-table th { vertical-align: middle; }
+.role-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.role-admin {
+  background: #ddeeff;
+  color: #0b4a8f;
+}
+.role-employee {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* —— Tract-admin view (PR-3) —— */
+.tract-create-form {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin: 8px 0 4px;
+  flex-wrap: wrap;
+}
+.tract-create-form input {
+  flex: 1;
+  min-width: 180px;
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 11px;
+  border: 1px solid var(--slate-300, #cbd5e1);
+  border-radius: 8px;
+  background: var(--white, #fff);
+}
+.tract-create-form input:focus {
+  outline: none;
+  border-color: var(--brand-600, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.tract-companies-table td, .tract-companies-table th { vertical-align: middle; }

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tract-AI Repo Audit</title>
+<style>
+  @page { size: A4; margin: 16mm 18mm; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: #1f2328;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    margin: 0;
+  }
+  h1 {
+    font-size: 18pt;
+    margin: 0 0 4pt;
+    letter-spacing: -0.01em;
+  }
+  h2 {
+    font-size: 12.5pt;
+    margin: 14pt 0 4pt;
+    padding-bottom: 3pt;
+    border-bottom: 1px solid #d0d7de;
+  }
+  h3 { font-size: 11pt; margin: 10pt 0 4pt; }
+  p { margin: 0 0 6pt; }
+  ul, ol { margin: 0 0 8pt 18pt; padding: 0; }
+  li { margin-bottom: 3pt; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 9.4pt;
+    background: #f3f4f6;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 4pt 0 8pt;
+    font-size: 10pt;
+  }
+  th, td {
+    border: 1px solid #d0d7de;
+    padding: 4pt 7pt;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: #f6f8fa; font-weight: 600; }
+  .lede { color: #57606a; margin-bottom: 10pt; font-size: 10pt; }
+  .ok { color: #1a7f37; font-weight: 600; }
+  .bad { color: #b42318; font-weight: 600; }
+  .score { color: #57606a; font-weight: 500; }
+  .meta {
+    color: #57606a;
+    font-size: 9pt;
+    margin-bottom: 10pt;
+  }
+  .tldr {
+    border-left: 3px solid #0969da;
+    background: #ddf4ff;
+    padding: 8pt 10pt;
+    margin: 10pt 0 0;
+    border-radius: 0 4px 4px 0;
+    font-size: 10pt;
+  }
+</style>
+</head>
+<body>
+
+<h1>Tract-AI Repo Audit</h1>
+<div class="meta">Reviewer: Claude Code &middot; Date: 2026-05-17 &middot; Branch: <code>main</code> @ 98e9b88</div>
+<p class="lede"><strong>Scope:</strong> ~4,100 LOC across 9 source files. Backend = Node/Express 5 (CommonJS); Frontend = vanilla JS + Vite, deployed via Netlify. Supabase for persistence (optional).</p>
+
+<h2>1. Repo setup <span class="score">&mdash; 6/10</span></h2>
+<table>
+  <tr><th style="width:22%">Area</th><th>Notes</th></tr>
+  <tr><td>Structure</td><td>Two-package: root for backend deps, <code>frontend/</code> for Vite. Reasonable.</td></tr>
+  <tr><td>Env files</td><td><strong>Mismatch.</strong> <code>backend/server.js:2</code> and <code>backend/supabaseClient.js:4</code> read <code>path.join(__dirname, "..", ".env")</code> &mdash; i.e. project root &mdash; but the file actually lives in <code>backend/.env</code>. Without a symlink, the API loads zero env vars and Supabase <code>createClient(undefined, &hellip;)</code> throws. Either move the file or fix the path.</td></tr>
+  <tr><td>Migrations</td><td><code>backend/supabase-migrations/</code> contains only <code>alter table</code> files. <strong>No base <code>create table public.scans</code></strong> &mdash; fresh Supabase projects 500 on every <code>/api/scans</code> and <code>/api/stats</code> even with <code>PERSIST_SCANS=false</code>. This is the error encountered during setup.</td></tr>
+  <tr><td>Ports</td><td>Vite + API hard-pinned to 3000/3001 with <code>strictPort: true</code> and matching error strings. Conflict-prone on dev machines running other Node apps. Hardcoding the proxy target to a sibling port is brittle &mdash; env-driven <code>VITE_DEV_API_PORT</code> would be cleaner.</td></tr>
+  <tr><td>Tooling</td><td>No tests, no linter/Prettier config, no CI, no Dockerfile, no root README/CLAUDE.md. <code>.gitignore</code> is 2 lines.</td></tr>
+  <tr><td>Secrets</td><td><code>.env</code> is gitignored. Service-role key only used server-side &mdash; correct.</td></tr>
+</table>
+
+<h2>2. Backend implementation <span class="score">&mdash; 7/10</span></h2>
+<ul>
+  <li><span class="ok">Engine layer (<code>query.js</code>) is the strongest part.</span> All four providers return a uniform <code>{ text, sources, error? }</code>, and <code>server.js</code> wires them via a single <code>ENGINE_FNS</code> map (<code>server.js:38-43</code>). Adding a 5th provider is a 1-function change.</li>
+  <li><code>prompts.js</code> does atomic-rename JSON persistence with length + <code>{{brand}}</code> validation &mdash; well done.</li>
+  <li><code>save.js:11-21</code> validates <code>scan_id</code> with a helpful error. Good defensive boundary.</li>
+  <li><span class="bad"><code>server.js</code> is monolithic (456 LOC).</span> Routes, in-memory aggregation in <code>/api/stats</code> (lines 137&ndash;305), brand normalization, and ignored-brand env logic all share one file. The stats handler re-iterates rows 3&times; and is fine at &lt;1k rows but won&rsquo;t scale &mdash; move aggregation to SQL once persistence is on.</li>
+  <li><span class="bad"><code>/api/scan</code> is fully sequential</span> (<code>server.js:350-408</code>): <code>brands &times; prompts &times; engines</code> nested <code>for await</code>. 4 &times; 5 &times; 4 = 80 serial LLM calls, which is why <code>requestTimeout</code> is set to 15 min. <code>Promise.all</code> across engines per prompt would cut this 4&times;.</li>
+  <li>No input validation library (Zod/Joi), no rate limiting, no auth, CORS is wide open (<code>app.use(cors())</code>). Acceptable for local/demo, not for any public deploy.</li>
+  <li><code>analyze.js</code> is heuristic keyword matching &mdash; easily gamed (no negation: &ldquo;not great&rdquo; &rarr; positive). Fine for v0, but flag it: numbers in the dashboard are weakly grounded.</li>
+</ul>
+
+<h2>3. Frontend implementation <span class="score">&mdash; 5/10</span></h2>
+<ul>
+  <li><span class="bad"><code>frontend/src/app.js</code> is 1,668 lines in a single function (<code>mount()</code>).</span> All HTML templates, event wiring, charts, localStorage cache, and stats recomputation live in one closure. No componentization; no framework. The top ~330 lines of pure helpers (escape, format, brand resolution, chart renderers) are clean and reusable; the bottom 1,300 are not.</li>
+  <li>Charts are hand-rolled SVG/divs &mdash; keeps bundle tiny but ties every data shape to a render path. Hard to extend.</li>
+  <li><strong>Duplicated stats logic:</strong> server computes a stats blob in <code>/api/stats</code>; the client recomputes a similar blob in <code>statsFromAudit</code> (<code>app.js:1065</code>) for the localStorage-only path. Two sources of truth for the same metrics.</li>
+  <li><code>apiUrl()</code> + <code>VITE_API_URL</code> story is well-thought-out: dev uses Vite proxy, prod injects build-time origin.</li>
+  <li><code>fetchJson</code> (<code>app.js:18-50</code>) handles HTML-instead-of-JSON cases nicely, but its error strings still mention <code>port 3000/3001</code> &mdash; stale once ports change.</li>
+  <li>XSS posture: <code>escapeHtml</code> is used consistently inside the manual <code>innerHTML</code> strings. Reasonable.</li>
+</ul>
+
+<h2>4. Code reusability</h2>
+<table>
+  <tr><th style="width:55%">Layer</th><th>Reusable?</th></tr>
+  <tr><td>Backend engine adapters</td><td><span class="ok">&#10003; Excellent</span> &mdash; uniform contract, single registry</td></tr>
+  <tr><td>Prompt templates</td><td><span class="ok">&#10003;</span> Substitution + persistence is a clean module</td></tr>
+  <tr><td>Frontend pure helpers (top of <code>app.js</code>)</td><td><span class="ok">&#10003;</span> Could be lifted into <code>utils/</code> files as-is</td></tr>
+  <tr><td>Frontend views / charts</td><td><span class="bad">&#10007;</span> Tangled in <code>mount()</code>; would need extraction before reuse</td></tr>
+  <tr><td>Stats computation</td><td><span class="bad">&#10007;</span> Duplicated client/server, no shared schema</td></tr>
+  <tr><td>Config / logging / error envelope</td><td><span class="bad">&#10007;</span> No abstraction; <code>process.env.X</code> and <code>console.*</code> scattered</td></tr>
+</table>
+
+<h2>5. Top fixes, ranked by ROI</h2>
+<ol>
+  <li><strong>Add <code>create-scans.sql</code> base migration</strong> &mdash; unblocks fresh setups (drafted at <code>backend/supabase-migrations/create-scans.sql</code>, awaiting apply).</li>
+  <li><strong>Fix the <code>.env</code> path</strong> in <code>server.js:2</code> and <code>supabaseClient.js:4</code> to read <code>__dirname + "/.env"</code>, or move the file to root. Pick one canonical location.</li>
+  <li><strong>Parallelize <code>/api/scan</code></strong> across engines per prompt &mdash; biggest UX win, ~4&times; faster runs.</li>
+  <li><strong>Move <code>/api/stats</code> aggregation to SQL</strong> before turning on <code>PERSIST_SCANS</code> at any real volume.</li>
+  <li><strong>Split <code>app.js</code></strong> along view boundaries (home / test-results / run-audit / prompts) &mdash; even without a framework, four files of ~400 lines each is dramatically more navigable.</li>
+  <li><strong>Add a README</strong> with env-file location, port assumptions, and migration order. The current setup story is reverse-engineered from comments inside <code>vite.config.js</code> and <code>netlify.toml</code>.</li>
+</ol>
+
+<p class="tldr"><strong>TL;DR:</strong> Tasteful v0 with one excellent abstraction (engine layer), two real setup bugs (missing base migration, env path mismatch), and one chunk of structural debt (the 1.7k-line frontend file). Worth shipping after fixes 1 + 2; worth refactoring after fix 5.</p>
+
+</body>
+</html>

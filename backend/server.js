@@ -34,6 +34,12 @@ const {
 const { analyzeResponse } = require("./analyze.js");
 const { saveResult } = require("./save.js");
 const supabase = require("./supabaseClient.js");
+const {
+  requireUser,
+  requireCompany,
+  requireCompanyAdmin,
+  requireTractStaff,
+} = require("./middleware/auth.js");
 
 const ENGINE_FNS = {
   anthropic: { label: "Claude", fn: queryAnthropic },
@@ -99,7 +105,19 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "tract-api" });
 });
 
-app.get("/api/prompts", (req, res) => {
+app.get("/api/auth/me", requireUser, (req, res) => {
+  res.json({
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+      company_id: req.user.company_id,
+      company_role: req.user.company_role,
+      tract_role: req.user.tract_role,
+    },
+  });
+});
+
+app.get("/api/prompts", requireUser, (req, res) => {
   const brand = String(req.query.brand || "").trim();
   if (!brand) {
     return res.status(400).json({ error: "Query parameter brand is required." });
@@ -107,11 +125,11 @@ app.get("/api/prompts", (req, res) => {
   res.json({ brand, prompts: getPrompts(brand) });
 });
 
-app.get("/api/prompt-templates", (_req, res) => {
+app.get("/api/prompt-templates", requireUser, (_req, res) => {
   res.json({ templates: getPromptTemplates() });
 });
 
-app.put("/api/prompt-templates", (req, res) => {
+app.put("/api/prompt-templates", requireUser, (req, res) => {
   const result = setPromptTemplates(req.body?.templates);
   if (!result.ok) {
     return res.status(400).json({ error: result.error });
@@ -119,11 +137,12 @@ app.put("/api/prompt-templates", (req, res) => {
   res.json({ ok: true, templates: getPromptTemplates() });
 });
 
-app.get("/api/scans", async (req, res) => {
+app.get("/api/scans", requireUser, requireCompany, async (req, res) => {
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || 40));
   const { data, error } = await supabase
     .from("scans")
     .select("*")
+    .eq("company_id", req.user.company_id)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -134,12 +153,13 @@ app.get("/api/scans", async (req, res) => {
   res.json({ scans: filterIgnoredBrands(data || []) });
 });
 
-app.get("/api/stats", async (_req, res) => {
+app.get("/api/stats", requireUser, requireCompany, async (req, res) => {
   const { data, error } = await supabase
     .from("scans")
     .select(
       "brand, sentiment, brand_mentioned, engine, scan_id, competitors_mentioned, source_count"
-    );
+    )
+    .eq("company_id", req.user.company_id);
 
   if (error) {
     console.error("Stats error:", error.message);
@@ -326,7 +346,7 @@ function normalizeScanBrands(body) {
   return out;
 }
 
-app.post("/api/scan", async (req, res) => {
+app.post("/api/scan", requireUser, requireCompany, async (req, res) => {
   const brandsList = normalizeScanBrands(req.body);
   if (brandsList.length === 0) {
     return res.status(400).json({
@@ -353,57 +373,65 @@ app.post("/api/scan", async (req, res) => {
     scanIds.push(scanRunId);
 
     for (const prompt of prompts) {
-      for (const key of engines) {
-        const { label, fn } = ENGINE_FNS[key];
-        const raw = await fn(prompt);
-        const responseText = engineResponseText(raw);
-        const engineError =
-          raw != null && typeof raw === "object" && raw.error
-            ? String(raw.error)
-            : undefined;
-        const sources = engineSources(raw);
-        const source_count = sources.length;
-        const analysis = analyzeResponse(brand, responseText);
-        const responseFull = responseText
-          ? responseText
-          : engineError
-            ? `[${label} error] ${engineError.slice(0, 400)}`
-            : "(No response)";
+      // Engines run concurrently per prompt — they're independent third-party
+      // calls. Promise.all preserves input order so the results array stays
+      // deterministic (brand → prompt → engine).
+      const perEngine = await Promise.all(
+        engines.map(async (key) => {
+          const { label, fn } = ENGINE_FNS[key];
+          const raw = await fn(prompt);
+          const responseText = engineResponseText(raw);
+          const engineError =
+            raw != null && typeof raw === "object" && raw.error
+              ? String(raw.error)
+              : undefined;
+          const sources = engineSources(raw);
+          const source_count = sources.length;
+          const analysis = analyzeResponse(brand, responseText);
+          const responseFull = responseText
+            ? responseText
+            : engineError
+              ? `[${label} error] ${engineError.slice(0, 400)}`
+              : "(No response)";
 
-        let save = { ok: true };
-        if (PERSIST_SCANS) {
-          save = await saveResult({
+          let save = { ok: true };
+          if (PERSIST_SCANS) {
+            save = await saveResult({
+              scan_id: scanRunId,
+              comparison_id: comparisonId,
+              company_id: req.user.company_id,
+              created_by: req.user.id,
+              brand,
+              engine: label,
+              prompt,
+              response: responseFull,
+              brand_mentioned: analysis.brand_mentioned,
+              sentiment: analysis.sentiment,
+              competitors_mentioned: analysis.competitors_mentioned,
+              sources,
+              source_count,
+            });
+          }
+
+          return {
+            brand,
             scan_id: scanRunId,
             comparison_id: comparisonId,
-            brand,
             engine: label,
             prompt,
             response: responseFull,
-            brand_mentioned: analysis.brand_mentioned,
-            sentiment: analysis.sentiment,
-            competitors_mentioned: analysis.competitors_mentioned,
-            sources,
             source_count,
-          });
-        }
-
-        results.push({
-          brand,
-          scan_id: scanRunId,
-          comparison_id: comparisonId,
-          engine: label,
-          prompt,
-          response: responseFull,
-          source_count,
-          sources,
-          ok: save.ok,
-          persisted: PERSIST_SCANS,
-          saveError: save.ok ? undefined : save.error,
-          engineError,
-          analysis,
-          preview: (responseText || responseFull).slice(0, 320),
-        });
-      }
+            sources,
+            ok: save.ok,
+            persisted: PERSIST_SCANS,
+            saveError: save.ok ? undefined : save.error,
+            engineError,
+            analysis,
+            preview: (responseText || responseFull).slice(0, 320),
+          };
+        })
+      );
+      results.push(...perEngine);
     }
   }
 
@@ -439,6 +467,412 @@ app.post("/api/scan", async (req, res) => {
     results,
   });
 });
+
+// ---------------------------------------------------------------------------
+// Company-admin: Team management (PR-2)
+// ---------------------------------------------------------------------------
+
+app.get(
+  "/api/company/members",
+  requireUser,
+  requireCompanyAdmin,
+  async (req, res) => {
+    const { data, error } = await supabase.rpc("company_member_emails", {
+      p_company_id: req.user.company_id,
+    });
+    if (error) {
+      console.error("List members error:", error.message);
+      return res.status(500).json({ error: error.message });
+    }
+    res.json({ members: data || [] });
+  }
+);
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+app.post(
+  "/api/company/employees",
+  requireUser,
+  requireCompanyAdmin,
+  async (req, res) => {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: "Valid email required." });
+    }
+
+    // 1. Try the invite path (creates new auth.users row + sends invite email).
+    let userId = null;
+    let invitedFresh = false;
+    const inviteRes = await supabase.auth.admin.inviteUserByEmail(email, {
+      data: { company_id: req.user.company_id, invited_by: req.user.id },
+    });
+
+    if (!inviteRes.error) {
+      userId = inviteRes.data?.user?.id || null;
+      invitedFresh = true;
+    } else {
+      const msg = (inviteRes.error.message || "").toLowerCase();
+      const alreadyRegistered =
+        msg.includes("already") ||
+        inviteRes.error.code === "email_exists" ||
+        inviteRes.error.status === 422;
+      if (!alreadyRegistered) {
+        console.error("Invite error:", inviteRes.error.message);
+        return res.status(500).json({ error: inviteRes.error.message });
+      }
+      const { data: existing, error: lookupErr } = await supabase.rpc(
+        "find_user_by_email",
+        { p_email: email }
+      );
+      if (lookupErr) {
+        return res.status(500).json({ error: lookupErr.message });
+      }
+      userId = existing?.[0]?.id || null;
+      if (!userId) {
+        return res
+          .status(500)
+          .json({ error: "Email is registered but user lookup failed." });
+      }
+    }
+
+    // 2. Refuse duplicate membership in this company.
+    const { data: existingMember } = await supabase
+      .from("company_members")
+      .select("id")
+      .eq("company_id", req.user.company_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (existingMember) {
+      return res
+        .status(409)
+        .json({ error: "Already a member of this company." });
+    }
+
+    const { data: member, error: insertErr } = await supabase
+      .from("company_members")
+      .insert({
+        company_id: req.user.company_id,
+        user_id: userId,
+        role: "employee",
+        invited_by: req.user.id,
+      })
+      .select("id, user_id, role, joined_at, invited_by")
+      .single();
+    if (insertErr) {
+      return res.status(500).json({ error: insertErr.message });
+    }
+
+    res.json({
+      member: { ...member, email },
+      invitedFresh,
+    });
+  }
+);
+
+app.patch(
+  "/api/company/members/:id",
+  requireUser,
+  requireCompanyAdmin,
+  async (req, res) => {
+    const memberId = String(req.params.id || "");
+    const newRole = String(req.body?.role || "");
+    if (!["admin", "employee"].includes(newRole)) {
+      return res
+        .status(400)
+        .json({ error: "Role must be 'admin' or 'employee'." });
+    }
+
+    const { data: target, error: lookupErr } = await supabase
+      .from("company_members")
+      .select("id, user_id, role, company_id")
+      .eq("id", memberId)
+      .maybeSingle();
+    if (lookupErr) return res.status(500).json({ error: lookupErr.message });
+    if (!target || target.company_id !== req.user.company_id) {
+      return res.status(404).json({ error: "Member not found." });
+    }
+
+    if (target.role === "admin" && newRole !== "admin") {
+      const { count } = await supabase
+        .from("company_members")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", req.user.company_id)
+        .eq("role", "admin");
+      if ((count || 0) <= 1) {
+        return res
+          .status(400)
+          .json({ error: "Cannot demote the last admin." });
+      }
+    }
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("company_members")
+      .update({ role: newRole })
+      .eq("id", memberId)
+      .select("id, user_id, role")
+      .single();
+    if (updateErr) return res.status(500).json({ error: updateErr.message });
+    res.json({ member: updated });
+  }
+);
+
+app.delete(
+  "/api/company/members/:id",
+  requireUser,
+  requireCompanyAdmin,
+  async (req, res) => {
+    const memberId = String(req.params.id || "");
+    const { data: target, error: lookupErr } = await supabase
+      .from("company_members")
+      .select("id, user_id, role, company_id")
+      .eq("id", memberId)
+      .maybeSingle();
+    if (lookupErr) return res.status(500).json({ error: lookupErr.message });
+    if (!target || target.company_id !== req.user.company_id) {
+      return res.status(404).json({ error: "Member not found." });
+    }
+    if (target.user_id === req.user.id) {
+      return res.status(400).json({ error: "Cannot remove yourself." });
+    }
+    if (target.role === "admin") {
+      const { count } = await supabase
+        .from("company_members")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", req.user.company_id)
+        .eq("role", "admin");
+      if ((count || 0) <= 1) {
+        return res
+          .status(400)
+          .json({ error: "Cannot remove the last admin." });
+      }
+    }
+    const { error: delErr } = await supabase
+      .from("company_members")
+      .delete()
+      .eq("id", memberId);
+    if (delErr) return res.status(500).json({ error: delErr.message });
+    res.json({ ok: true });
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Tract internal: companies dashboard (PR-3)
+// ---------------------------------------------------------------------------
+
+function slugify(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+/** Invite-or-attach: returns { userId, invitedFresh } or { error }. */
+async function inviteOrAttachByEmail(email, jwtMetadata) {
+  const inviteRes = await supabase.auth.admin.inviteUserByEmail(email, {
+    data: jwtMetadata,
+  });
+  if (!inviteRes.error) {
+    return {
+      userId: inviteRes.data?.user?.id || null,
+      invitedFresh: true,
+    };
+  }
+  const msg = (inviteRes.error.message || "").toLowerCase();
+  const alreadyRegistered =
+    msg.includes("already") ||
+    inviteRes.error.code === "email_exists" ||
+    inviteRes.error.status === 422;
+  if (!alreadyRegistered) {
+    return { error: inviteRes.error.message };
+  }
+  const { data: existing, error: lookupErr } = await supabase.rpc(
+    "find_user_by_email",
+    { p_email: email }
+  );
+  if (lookupErr) return { error: lookupErr.message };
+  const userId = existing?.[0]?.id || null;
+  if (!userId) return { error: "Email registered but lookup failed." };
+  return { userId, invitedFresh: false };
+}
+
+app.get(
+  "/api/internal/companies",
+  requireUser,
+  requireTractStaff,
+  async (_req, res) => {
+    const { data, error } = await supabase.rpc("tract_companies_overview");
+    if (error) {
+      console.error("Companies overview error:", error.message);
+      return res.status(500).json({ error: error.message });
+    }
+    res.json({ companies: data || [] });
+  }
+);
+
+app.post(
+  "/api/internal/companies",
+  requireUser,
+  requireTractStaff,
+  async (req, res) => {
+    const name = String(req.body?.name || "").trim();
+    const adminEmail = String(req.body?.adminEmail || "")
+      .trim()
+      .toLowerCase();
+    if (!name) {
+      return res.status(400).json({ error: "Company name required." });
+    }
+    if (!adminEmail || !EMAIL_RE.test(adminEmail)) {
+      return res.status(400).json({ error: "Valid admin email required." });
+    }
+
+    const slug = slugify(name);
+    const { data: company, error: cErr } = await supabase
+      .from("companies")
+      .insert({
+        name,
+        slug: slug || null,
+        created_by: req.user.id,
+      })
+      .select("id, name, slug, plan, created_at")
+      .single();
+    if (cErr) {
+      return res.status(500).json({ error: cErr.message });
+    }
+
+    const attach = await inviteOrAttachByEmail(adminEmail, {
+      company_id: company.id,
+      role: "admin",
+      invited_by: req.user.id,
+    });
+    if (attach.error) {
+      // Rollback so we don't leave an admin-less company behind.
+      await supabase.from("companies").delete().eq("id", company.id);
+      return res.status(500).json({ error: attach.error });
+    }
+
+    const { error: mErr } = await supabase.from("company_members").insert({
+      company_id: company.id,
+      user_id: attach.userId,
+      role: "admin",
+      invited_by: req.user.id,
+    });
+    if (mErr) {
+      return res.status(500).json({
+        error: `Company created but admin add failed: ${mErr.message}`,
+        company,
+      });
+    }
+
+    res.json({ company, invitedFresh: attach.invitedFresh });
+  }
+);
+
+app.post(
+  "/api/internal/companies/:id/admins",
+  requireUser,
+  requireTractStaff,
+  async (req, res) => {
+    const companyId = String(req.params.id || "");
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: "Valid email required." });
+    }
+
+    const { data: company, error: cErr } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("id", companyId)
+      .maybeSingle();
+    if (cErr) return res.status(500).json({ error: cErr.message });
+    if (!company) return res.status(404).json({ error: "Company not found." });
+
+    const attach = await inviteOrAttachByEmail(email, {
+      company_id: companyId,
+      role: "admin",
+      invited_by: req.user.id,
+    });
+    if (attach.error) return res.status(500).json({ error: attach.error });
+
+    // If already a member, promote them to admin instead of inserting.
+    const { data: existingMember } = await supabase
+      .from("company_members")
+      .select("id, role")
+      .eq("company_id", companyId)
+      .eq("user_id", attach.userId)
+      .maybeSingle();
+
+    if (existingMember) {
+      if (existingMember.role === "admin") {
+        return res.json({
+          member: existingMember,
+          invitedFresh: attach.invitedFresh,
+          alreadyAdmin: true,
+        });
+      }
+      const { data: updated, error: uErr } = await supabase
+        .from("company_members")
+        .update({ role: "admin" })
+        .eq("id", existingMember.id)
+        .select("id, user_id, role")
+        .single();
+      if (uErr) return res.status(500).json({ error: uErr.message });
+      return res.json({
+        member: updated,
+        invitedFresh: attach.invitedFresh,
+        promoted: true,
+      });
+    }
+
+    const { data: member, error: insertErr } = await supabase
+      .from("company_members")
+      .insert({
+        company_id: companyId,
+        user_id: attach.userId,
+        role: "admin",
+        invited_by: req.user.id,
+      })
+      .select("id, user_id, role, joined_at")
+      .single();
+    if (insertErr) return res.status(500).json({ error: insertErr.message });
+
+    res.json({ member, invitedFresh: attach.invitedFresh });
+  }
+);
+
+app.post(
+  "/api/internal/companies/:id/deactivate",
+  requireUser,
+  requireTractStaff,
+  async (req, res) => {
+    const companyId = String(req.params.id || "");
+    const { data, error } = await supabase
+      .from("companies")
+      .update({ deactivated_at: new Date().toISOString() })
+      .eq("id", companyId)
+      .select("id, deactivated_at")
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ company: data });
+  }
+);
+
+app.post(
+  "/api/internal/companies/:id/reactivate",
+  requireUser,
+  requireTractStaff,
+  async (req, res) => {
+    const companyId = String(req.params.id || "");
+    const { data, error } = await supabase
+      .from("companies")
+      .update({ deactivated_at: null })
+      .eq("id", companyId)
+      .select("id, deactivated_at")
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ company: data });
+  }
+);
 
 const PORT = Number(process.env.PORT) || 3001;
 const server = app.listen(PORT, "127.0.0.1", () => {
