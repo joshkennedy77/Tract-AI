@@ -145,15 +145,25 @@ function brandInitials(name) {
   return String(name || "?").slice(0, 2).toUpperCase();
 }
 
-/** Same-hue blue palette (navy → sky) cycled per row so bars are visually
- *  distinct without leaving the blue family. */
+/** Distinct-hue palette cycled per row so each brand is easy to tell apart
+ *  at a glance. Pairs are [from, to] used as a left-to-right gradient. */
 const VISIBILITY_BAR_PALETTE = [
-  ["#1e3a8a", "#1d4ed8"], // navy
-  ["#1d4ed8", "#2563eb"], // deep blue
-  ["#2563eb", "#3b82f6"], // royal
-  ["#3b82f6", "#60a5fa"], // medium sky
-  ["#60a5fa", "#93c5fd"], // light sky
+  ["#2563eb", "#3b82f6"], // blue
+  ["#16a34a", "#22c55e"], // green
+  ["#d97706", "#f59e0b"], // amber
+  ["#dc2626", "#ef4444"], // red
+  ["#7c3aed", "#a855f7"], // purple
+  ["#0d9488", "#14b8a6"], // teal
+  ["#db2777", "#ec4899"], // pink
+  ["#0284c7", "#0ea5e9"], // sky
 ];
+
+/** Solid swatch color for a row index, mirroring VISIBILITY_BAR_PALETTE
+ *  so the Brand comparison table matches the Visibility bars. */
+function brandSwatchColor(index) {
+  const pair = VISIBILITY_BAR_PALETTE[index % VISIBILITY_BAR_PALETTE.length];
+  return pair[1];
+}
 
 /** Horizontal bars from real mention-rate % (not a synthetic time series). */
 function renderVisibilityBarRows(barRows) {
@@ -467,7 +477,7 @@ export function mount(root) {
             <p id="audit-session-note" class="session-audit-note is-hidden"></p>
 
             <div id="brand-compare-wrap" class="panel-card brand-compare-wrap is-hidden">
-              <h3 style="margin-top:0">Brand comparison</h3>
+              <h3 style="margin-top:0">Brand comparison <span class="help-dot" tabindex="0" role="img" aria-label="What this table shows" title="Side-by-side metrics for every brand in this audit: how many answers we collected, how often the brand was mentioned, how often competitors appeared with it, and the dominant sentiment.">?</span></h3>
               <p class="field-hint muted" style="margin-top:0">Metrics from your latest audit in this browser, split by audited brand.</p>
               <div class="table-wrap">
                 <table class="data-table brand-compare-table">
@@ -498,7 +508,7 @@ export function mount(root) {
 
             <div class="metrics-row">
               <div class="metric-card">
-                <h3>Brand presence</h3>
+                <h3>Brand presence <span class="help-dot" tabindex="0" role="img" aria-label="What 'Brand presence' shows" title="Visibility = % of AI answers that mentioned your brand. Answers scanned = total model replies analysed across this audit (every brand × prompt × engine).">?</span></h3>
                 <div class="metric-split">
                   <div class="metric-block ring-wrap">
                     <div>
@@ -516,7 +526,7 @@ export function mount(root) {
                 </div>
               </div>
               <div class="metric-card">
-                <h3>Coverage</h3>
+                <h3>Coverage <span class="help-dot" tabindex="0" role="img" aria-label="What 'Coverage' shows" title="Scan batches = number of distinct audit runs that contributed to this view. Brands tracked = number of unique brand names recorded across all audits.">?</span></h3>
                 <div class="metric-split">
                   <div class="metric-block">
                     <div class="metric-block-label">Scan batches</div>
@@ -531,7 +541,7 @@ export function mount(root) {
                 </div>
               </div>
               <div class="metric-card">
-                <h3>Competitor signals</h3>
+                <h3>Competitor signals <span class="help-dot" tabindex="0" role="img" aria-label="What 'Competitor signals' shows" title="Rows w/ competitors = % of AI answers that named at least one competitor alongside your brand. Top brand = the brand with the highest visibility in this audit.">?</span></h3>
                 <div class="metric-split">
                   <div class="metric-block">
                     <div class="metric-block-label">Rows w/ competitors</div>
@@ -546,7 +556,7 @@ export function mount(root) {
                 </div>
               </div>
               <div class="metric-card metric-card-sources">
-                <h3>Sources</h3>
+                <h3>Sources <span class="help-dot" tabindex="0" role="img" aria-label="What 'Sources' shows" title="Total sources cited = sum of URLs returned alongside each AI answer. The second column narrows that to answers where your brand was actually mentioned, so you can tell whether the AI tends to cite sources specifically when discussing your brand.">?</span></h3>
                 <div class="metric-sources-inner">
                   <div class="metric-sources-col">
                     <div class="metric-block-label metric-label-with-help">
@@ -586,13 +596,13 @@ export function mount(root) {
             </div>
 
             <div class="score-brand-filter" id="score-brand-filter">
-              <label for="score-brand-select"><strong>Show AEO &amp; GEO for:</strong></label>
+              <label for="score-brand-select"><strong>Show AEO &amp; GEO for:</strong> <span class="help-dot" tabindex="0" role="img" aria-label="What this selector does" title="Filters the AEO, GEO, and Tract score cards below to a single brand. 'All brands (pooled)' averages across every brand in this audit.">?</span></label>
               <select id="score-brand-select"></select>
             </div>
 
             <div class="score-cards-row">
               <div class="panel-card tract-score-card" id="tract-score-card">
-                <h3>Tract score</h3>
+                <h3>Tract score <span class="help-dot" tabindex="0" role="img" aria-label="What the Tract score means" title="Tract score: 0–100. A weighted blend of your AEO score (55%) and GEO score (45%). One number that summarises how well your brand performs in AI answers overall.">?</span></h3>
                 <p class="score-explain">
                   One number that combines AEO and GEO so you can track how
                   your brand is doing in AI answers overall.
@@ -637,7 +647,7 @@ export function mount(root) {
 
             <div class="bottom-grid">
               <div class="panel-card chart-panel-card">
-                <h3>Visibility &amp; sentiment</h3>
+                <h3>Visibility &amp; sentiment <span class="help-dot" tabindex="0" role="img" aria-label="What 'Visibility & sentiment' shows" title="Visibility tab: % of AI answers that mentioned each brand. Sentiment tab: split of positive / neutral / negative tone in those answers, per brand.">?</span></h3>
                 <div class="chart-tabs" id="chart-tabs" role="tablist">
                   <button type="button" class="chart-tab is-on" data-chart="visibility" role="tab" aria-selected="true">Visibility</button>
                   <button type="button" class="chart-tab" data-chart="sentiment" role="tab" aria-selected="false">Sentiment</button>
@@ -652,7 +662,7 @@ export function mount(root) {
               </div>
               <div class="panel-card">
                 <div class="leader-head">
-                  <h3 style="margin:0">Leaderboard</h3>
+                  <h3 style="margin:0">Leaderboard <span class="help-dot" tabindex="0" role="img" aria-label="What the Leaderboard shows" title="Brands ranked by visibility (the % of AI answers that mentioned them). Volume is the raw count of answers we have for each brand, and Sentiment is the dominant tone of those mentions.">?</span></h3>
                   <div class="leader-actions">
                     <button type="button" class="btn-ghost" id="btn-refresh-lb">Refresh</button>
                     <a href="#view-brands" class="btn-ghost js-nav" data-view="brands" style="text-decoration:none;display:inline-block">Run scan</a>
@@ -1704,6 +1714,44 @@ export function mount(root) {
     return map[it] || it || "—";
   }
 
+  const ENGINE_HELP = {
+    "openai": "OpenAI — ChatGPT-class model (GPT-4o-mini) asked about your brand. Web search is forced on, so it returns citations.",
+    "claude": "Claude — Anthropic's assistant, asked about your brand with the web_search tool enabled so it returns citations.",
+    "gemini": "Gemini — Google's assistant, asked about your brand with Google Search grounding enabled so it returns citations.",
+    "perplexity": "Perplexity — a search-grounded answer engine. Always returns the sources it cites.",
+  };
+  const INTENT_HELP = {
+    informational: "Informational — basic 'What is X?' questions about the brand.",
+    comparison: "Comparison — 'Is X a good option vs competitors?' style questions.",
+    reputation: "Reputation — 'What are people saying about X?' style questions.",
+    recommendation: "Recommendation — direct 'Would you recommend X?' questions.",
+    alternatives: "Alternatives — 'What are the best alternatives to X?' questions.",
+    best_of: "Best-of — 'What's the best X?' shopping-style questions.",
+    other: "Other — prompts that don't fall into a specific intent.",
+  };
+  const RECOMMENDATION_HELP = {
+    recommended: "Recommended — the AI explicitly recommended or endorsed your brand in its answer.",
+    mentioned: "Mentioned — your brand was named or listed but not actively recommended.",
+    negative: "Negative — the AI spoke critically about your brand or flagged concerns.",
+    omitted: "Omitted — your brand name didn't appear in the answer at all.",
+  };
+
+  function helpIcon(text, label) {
+    if (!text) return "";
+    const safe = escapeHtml(text);
+    const aria = escapeHtml(label || `Help: ${String(text).slice(0, 60)}`);
+    return `<span class="help-dot" tabindex="0" role="img" aria-label="${aria}" title="${safe}">?</span>`;
+  }
+
+  function engineHelp(name) {
+    const key = String(name || "").toLowerCase();
+    return ENGINE_HELP[key] || `${name} — one of the AI models we asked about your brand.`;
+  }
+
+  function intentHelp(it) {
+    return INTENT_HELP[String(it || "").toLowerCase()] || INTENT_HELP.other;
+  }
+
   function recommendationPill(rec, n, total) {
     const pct = total > 0 ? Math.round((n / total) * 100) : 0;
     const cls =
@@ -1711,7 +1759,7 @@ export function mount(root) {
       : rec === "negative" ? "pill pill-neg"
       : rec === "omitted" ? "pill pill-neu"
       : "pill pill-neu";
-    return `<span class="${cls}" title="${pct}% of judged rows">${escapeHtml(rec)} · ${n}</span>`;
+    return `<span class="${cls}" title="${pct}% of judged rows">${escapeHtml(rec)} · ${n}${helpIcon(RECOMMENDATION_HELP[rec], `What "${rec}" means`)}</span>`;
   }
 
   function renderAeoTrend(trend) {
@@ -1745,7 +1793,7 @@ export function mount(root) {
   function renderAeoBreakdown(title, items, keyName, helpText) {
     if (!Array.isArray(items) || items.length === 0) return "";
     const rows = items
-      .map((it) => {
+      .map((it, i) => {
         const label =
           keyName === "intent" ? intentLabel(it.intent) : it[keyName];
         const raw = Number(it.score);
@@ -1753,8 +1801,13 @@ export function mount(root) {
         const pct = hasScore ? Math.max(0, Math.min(100, Math.round(raw))) : 0;
         const fillWidth = hasScore ? (pct > 0 ? Math.max(pct, 2) : 0) : 0;
         const value = hasScore ? String(pct) : "—";
-        return `<div class="score-line-row" role="img" aria-label="${escapeHtml(label || "—")} score ${value}">
-          <span class="score-line-label" title="${escapeHtml(label || "—")}">${escapeHtml(label || "—")}</span>
+        const [from, to] =
+          VISIBILITY_BAR_PALETTE[i % VISIBILITY_BAR_PALETTE.length];
+        const rowStyle = `--row-from:${from};--row-to:${to}`;
+        const rowHelp =
+          keyName === "intent" ? intentHelp(it.intent) : engineHelp(it.engine);
+        return `<div class="score-line-row" role="img" aria-label="${escapeHtml(label || "—")} score ${value}" style="${rowStyle}">
+          <span class="score-line-label" title="${escapeHtml(label || "—")}">${escapeHtml(label || "—")}${helpIcon(rowHelp, `What ${label} means`)}</span>
           <div class="score-line-track">
             <div class="score-line-fill" style="width:${fillWidth}%"></div>
           </div>
@@ -1764,8 +1817,7 @@ export function mount(root) {
       })
       .join("");
     return `<div class="aeo-block">
-      <h4>${escapeHtml(title)}</h4>
-      ${helpText ? `<p class="aeo-block-help muted">${escapeHtml(helpText)}</p>` : ""}
+      <h4>${escapeHtml(title)}${helpIcon(helpText, `What "${title}" shows`)}</h4>
       <div class="score-line-list">${rows}</div>
     </div>`;
   }
@@ -1796,36 +1848,39 @@ export function mount(root) {
   }
 
   function renderAeoCard(stats, brandLabel) {
+    const aeoTitleHtml = `AEO score · ${escapeHtml(brandLabel)}${helpIcon(
+      "AEO (Answer Engine Optimization) score: 0–100. Combines whether the AI recommended your brand (40 pts), where it ranked it (20 pts), how it was mentioned (15 pts), and whether the facts were correct (25 pts).",
+      "What the AEO score means"
+    )}`;
     if (!stats || stats.n === 0 || stats.judged === 0) {
-      el.aeoCardTitle.textContent = `AEO score · ${brandLabel}`;
+      el.aeoCardTitle.innerHTML = aeoTitleHtml;
       el.aeoCardBody.innerHTML = `<p class="muted">No AEO judgements yet — run a scan with <code>OPENAI_API_KEY</code> set.</p>`;
       return;
     }
     const total = stats.judged || stats.n;
-    el.aeoCardTitle.textContent = `AEO score · ${brandLabel}`;
+    el.aeoCardTitle.innerHTML = aeoTitleHtml;
     el.aeoCardBody.innerHTML = `
       <div class="aeo-headline">
         ${renderScoreRing(stats.score, `${stats.judged} judged`)}
         <div class="aeo-score-meta">
           <div><strong>${stats.judged}</strong> judged of ${stats.n} answers</div>
-          <div class="muted">Avg accuracy ${stats.avgAccuracy ?? "—"} / 100</div>
           <p class="aeo-headline-help muted">
             The ring shows the average AEO score (0–100) across every answer
-            we judged for this brand. Accuracy is how often the AI got its
-            facts right.
+            we judged for this brand.
           </p>
         </div>
       </div>
-      <p class="aeo-block-help muted">
-        How the AI treated your brand across all answers — was it
-        <strong>recommended</strong>, just <strong>mentioned</strong>,
-        spoken about <strong>negatively</strong>, or <strong>omitted</strong> entirely?
-      </p>
-      <div class="aeo-mix">
-        ${recommendationPill("recommended", stats.mix.recommended || 0, total)}
-        ${recommendationPill("mentioned",   stats.mix.mentioned   || 0, total)}
-        ${recommendationPill("negative",    stats.mix.negative    || 0, total)}
-        ${recommendationPill("omitted",     stats.mix.omitted     || 0, total)}
+      <div class="aeo-mix-wrap">
+        <h4 class="aeo-mix-title">Recommendation mix${helpIcon(
+          "How the AI treated your brand across all judged answers. Hover any pill to see what that label means.",
+          "What 'Recommendation mix' shows"
+        )}</h4>
+        <div class="aeo-mix">
+          ${recommendationPill("recommended", stats.mix.recommended || 0, total)}
+          ${recommendationPill("mentioned",   stats.mix.mentioned   || 0, total)}
+          ${recommendationPill("negative",    stats.mix.negative    || 0, total)}
+          ${recommendationPill("omitted",     stats.mix.omitted     || 0, total)}
+        </div>
       </div>
       <div class="aeo-breakdown-row">
         ${renderAeoBreakdown(
@@ -1842,43 +1897,52 @@ export function mount(root) {
         )}
       </div>
       <div class="aeo-block">
-        <h4>Trend over time</h4>
-        <p class="aeo-block-help muted">
-          How your AEO score is moving day to day. Re-run the audit
-          tomorrow to start seeing a line.
-        </p>
+        <h4>Trend over time${helpIcon(
+          "Average AEO score charted day by day. We bucket scans by the day they ran. With just one day of data you'll see a single point; re-run later to build a real line.",
+          "What 'Trend over time' shows"
+        )}</h4>
         ${renderAeoTrend(stats.trend)}
       </div>
     `;
   }
 
   function renderGeoCard(stats, brandLabel) {
+    const geoTitleHtml = `GEO score · ${escapeHtml(brandLabel)}${helpIcon(
+      "GEO (Generative Engine Optimization) score: 0–100. Combines whether the AI cited your own domain (30 pts), whether it cited any source (25 pts), how trustworthy those sources are (25 pts), and whether it recommended you while citing sources (20 pts).",
+      "What the GEO score means"
+    )}`;
     if (!stats || stats.n === 0) {
-      el.geoCardTitle.textContent = `GEO score · ${brandLabel}`;
+      el.geoCardTitle.innerHTML = geoTitleHtml;
       el.geoCardBody.innerHTML = `<p class="muted">No citation data yet.</p>`;
       return;
     }
-    el.geoCardTitle.textContent = `GEO score · ${brandLabel}`;
+    el.geoCardTitle.innerHTML = geoTitleHtml;
     el.geoCardBody.innerHTML = `
       <div class="aeo-headline">
         ${renderScoreRing(stats.score, `${stats.scored} scored`)}
         <div class="aeo-score-meta">
           <div><strong>${stats.scored}</strong> scored of ${stats.n} answers</div>
-          <div class="muted">Avg source authority ${stats.avgAuthority ?? "—"} / 100</div>
           <p class="aeo-headline-help muted">
-            The ring shows the average GEO score (0–100). Source authority
-            measures how trustworthy the websites the AI cited are.
+            The ring shows the average GEO score (0–100) across every answer
+            we scored for this brand.
           </p>
         </div>
       </div>
-      <p class="aeo-block-help muted">
-        <strong>Own domain</strong> = the AI cited your website.
-        <strong>Any citation</strong> = the AI linked to a source at all.
-        Both are shown as a share of all answers.
-      </p>
-      <div class="aeo-mix">
-        <span class="pill pill-pos" title="Answers citing one of the brand's owned domains">own domain · ${stats.ownDomainRate}%</span>
-        <span class="pill pill-neu" title="Answers with at least one citation">any citation · ${stats.anyCitationRate}%</span>
+      <div class="aeo-mix-wrap">
+        <h4 class="aeo-mix-title">Citation mix${helpIcon(
+          "How often the AI's answers included citations, and how often those citations pointed to your own website.",
+          "What 'Citation mix' shows"
+        )}</h4>
+        <div class="aeo-mix">
+          <span class="pill pill-pos">own domain · ${stats.ownDomainRate}%${helpIcon(
+            "Share of all answers where the AI cited a page on your own website (matched against the brand profile's domains).",
+            "What 'own domain' means"
+          )}</span>
+          <span class="pill pill-neu">any citation · ${stats.anyCitationRate}%${helpIcon(
+            "Share of all answers that included at least one citation, regardless of which website it pointed to.",
+            "What 'any citation' means"
+          )}</span>
+        </div>
       </div>
       <div class="aeo-breakdown-row">
         ${renderAeoBreakdown(
@@ -1895,12 +1959,10 @@ export function mount(root) {
         )}
       </div>
       <div class="aeo-block">
-        <h4>Trend over time</h4>
-        <p class="aeo-block-help muted">
-          How your GEO score is moving day to day. Citations vary a lot
-          per engine, so use this for direction, not exact week-over-week
-          comparisons.
-        </p>
+        <h4>Trend over time${helpIcon(
+          "Average GEO score charted day by day. Citation behaviour varies a lot between engines, so use this for direction (trending up vs. down), not exact week-over-week comparisons.",
+          "What 'Trend over time' shows"
+        )}</h4>
         ${renderAeoTrend(stats.trend)}
       </div>
     `;
@@ -2160,13 +2222,19 @@ export function mount(root) {
       if (bc.length > 1) {
         compareWrap.classList.remove("is-hidden");
         compareBody.innerHTML = bc
-          .map((row) => {
+          .map((row, i) => {
             const sent = escapeHtml(row.dominantSentiment || "—");
             const cls = sentimentClass(
               String(row.dominantSentiment || "").toLowerCase()
             );
+            const swatch = brandSwatchColor(i);
             return `<tr>
-              <td><strong>${escapeHtml(row.brand)}</strong></td>
+              <td>
+                <span class="brand-cell">
+                  <span class="brand-swatch" style="background:${swatch}" aria-hidden="true"></span>
+                  <strong>${escapeHtml(row.brand)}</strong>
+                </span>
+              </td>
               <td>${row.count}</td>
               <td><strong>${row.mentionRatePercent}%</strong></td>
               <td>${row.competitorSignalPercent}%</td>

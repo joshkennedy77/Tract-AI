@@ -1541,27 +1541,43 @@ a {
 .score-brand-filter {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin: 0.5rem 0 0;
-  padding: 0.5rem 0.75rem;
+  gap: 0.85rem;
+  margin: 1rem 0 0.5rem;
+  padding: 0.9rem 1.1rem;
   border: 1px solid var(--slate-200);
-  border-radius: 8px;
-  background: var(--slate-50, #f8fafc);
+  border-left: 4px solid var(--brand-600, #2563eb);
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    rgba(37, 99, 235, 0.06),
+    var(--slate-50, #f8fafc) 55%
+  );
+  box-shadow: var(--shadow);
 }
 .score-brand-filter.is-hidden { display: none; }
 .score-brand-filter label,
 .score-brand-filter label strong {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
   color: var(--slate-900);
+  letter-spacing: -0.01em;
 }
 .score-brand-filter select {
   font: inherit;
-  font-size: 14px;
-  padding: 5px 9px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--slate-900);
+  padding: 9px 14px;
   border: 1px solid var(--slate-300, #cbd5e1);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--white);
+  min-width: 12rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.score-brand-filter select:focus {
+  outline: none;
+  border-color: var(--brand-600, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
 
 .tract-score-card {
@@ -1650,11 +1666,21 @@ a {
   font-size: 0.78rem;
   letter-spacing: 0.02em;
 }
+.aeo-mix-wrap {
+  margin: 0.75rem 0;
+}
+.aeo-mix-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate-700);
+}
 .aeo-mix {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  margin: 0.5rem 0 0.75rem;
 }
 .aeo-mix .pill {
   background: var(--card-accent-soft, rgba(15, 23, 42, 0.08));
@@ -1665,7 +1691,8 @@ a {
   gap: 0.6rem;
 }
 .aeo-block {
-  background: var(--card-accent-soft, var(--slate-50));
+  background: var(--slate-50, #f8fafc);
+  border: 1px solid var(--slate-200);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
   margin-top: 0.5rem;
@@ -1700,6 +1727,55 @@ a {
   line-height: 1.4;
   color: var(--slate-600);
 }
+
+/* Brand comparison table — colored swatch next to each brand name. */
+.brand-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.brand-swatch {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+/* Tiny "?" hover-help dot used next to individual scores on the AEO/GEO/Tract
+   cards. Native title attribute provides the tooltip, keyboard-focusable for
+   a11y. */
+.help-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--slate-300, #cbd5e1);
+  background: var(--white);
+  color: var(--slate-600, #475569);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  vertical-align: middle;
+  user-select: none;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.help-dot:hover,
+.help-dot:focus-visible {
+  background: var(--slate-100, #f1f5f9);
+  color: var(--slate-900);
+  border-color: var(--slate-400, #94a3b8);
+  outline: none;
+}
+.aeo-mix .pill .help-dot {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(15, 23, 42, 0.18);
+  color: var(--slate-700);
+}
 /* Horizontal score lines used in AEO/GEO "By engine" + "By intent" blocks.
    Each row is: label · 0–100 line · value · row count. Color picks up the
    card's --card-accent so AEO is emerald and GEO is purple. */
@@ -1724,19 +1800,23 @@ a {
 .score-line-track {
   height: 6px;
   border-radius: 999px;
-  background: var(--card-accent-soft, rgba(15, 23, 42, 0.08));
+  background: rgba(15, 23, 42, 0.08);
   overflow: hidden;
 }
 .score-line-fill {
   height: 100%;
-  background: var(--card-accent, var(--slate-700));
+  background: linear-gradient(
+    90deg,
+    var(--row-from, var(--card-accent, var(--slate-700))),
+    var(--row-to, var(--card-accent, var(--slate-700)))
+  );
   border-radius: inherit;
   transition: width 320ms ease;
 }
 .score-line-value {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--card-accent, var(--slate-900));
+  color: var(--row-to, var(--card-accent, var(--slate-900)));
   text-align: right;
 }
 .score-line-meta {
