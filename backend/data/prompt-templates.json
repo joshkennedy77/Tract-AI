@@ -1,9 +1,9 @@
 {
   "templates": [
-    "What is {{brand}} and what do they do? Short answer.",
-    "Is {{brand}} a good option compared to competitors? Short answer.",
-    "What are people saying about {{brand}}? Short answer please.",
-    "Would you recommend {{brand}}? Why or why not? Short answer.",
-    "What are the best alternatives to {{brand}}? Short answer."
+    { "text": "What is {{brand}} and what do they do? Short answer.", "intent": "informational" },
+    { "text": "Is {{brand}} a good option compared to competitors? Short answer.", "intent": "comparison" },
+    { "text": "What are people saying about {{brand}}? Short answer.", "intent": "reputation" },
+    { "text": "Would you recommend {{brand}}? Short answer.", "intent": "recommendation" },
+    { "text": "What are the best alternatives to {{brand}}? Short answer.", "intent": "alternatives" }
   ]
 }

@@ -78,16 +78,53 @@ function normalizeSourceList(raw) {
   return [...new Set(out)];
 }
 
+/**
+ * Gemini grounding metadata reports each citation as
+ *   { web: { uri: "https://vertexaisearch.cloud.google.com/grounding-api-redirect/...",
+ *            title: "example.com" } }
+ * The `uri` is a Google redirect — useless for GEO domain matching — so prefer
+ * `title` when it looks like a bare domain.
+ */
 function extractGeminiSources(result) {
   const cand = result?.response?.candidates?.[0];
   const chunks = cand?.groundingMetadata?.groundingChunks;
   if (!Array.isArray(chunks)) return [];
   const urls = [];
   for (const ch of chunks) {
-    const uri = ch?.web?.uri;
-    if (uri) urls.push(String(uri));
+    const title = String(ch?.web?.title || "").trim().toLowerCase();
+    const uri = String(ch?.web?.uri || "").trim();
+    const looksLikeDomain = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(title);
+    if (looksLikeDomain) urls.push(`https://${title}`);
+    else if (uri) urls.push(uri);
   }
   return [...new Set(urls)];
+}
+
+/**
+ * Claude `web_search_20250305` returns text blocks with .citations[] and
+ * optional `web_search_tool_result` blocks with raw .content[].url. Prefer the
+ * citations (URLs the model actually grounded in); fall back to raw results.
+ */
+function extractAnthropicSources(message) {
+  const cited = [];
+  const raw = [];
+  const blocks = Array.isArray(message?.content) ? message.content : [];
+  for (const block of blocks) {
+    if (block?.type === "text" && Array.isArray(block.citations)) {
+      for (const c of block.citations) {
+        const u = c?.url || c?.source?.url;
+        if (u) cited.push(String(u));
+      }
+    }
+    if (block?.type === "web_search_tool_result" && Array.isArray(block.content)) {
+      for (const r of block.content) {
+        const u = r?.url;
+        if (u) raw.push(String(u));
+      }
+    }
+  }
+  const preferred = cited.length > 0 ? cited : raw;
+  return [...new Set(preferred)];
 }
 
 function extractGeminiText(result) {
@@ -131,10 +168,16 @@ async function queryAnthropic(prompt) {
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 512,
+      max_tokens: 1024,
+      tools: [
+        { type: "web_search_20250305", name: "web_search", max_uses: 3 },
+      ],
       messages: [{ role: "user", content: prompt }],
     });
-    return { text: anthropicText(message), sources: [] };
+    return {
+      text: anthropicText(message),
+      sources: extractAnthropicSources(message),
+    };
   } catch (err) {
     console.error("Anthropic API error:", err.message || err);
     return { text: null, sources: [] };
@@ -148,26 +191,40 @@ async function queryOpenAI(prompt) {
       console.error("OpenAI API error: OPENAI_API_KEY is not set");
       return { text: null, sources: [] };
     }
-    const completion = await openai.chat.completions.create({
+
+    // Responses API + web_search_preview is the only way to get URL citations
+    // back from OpenAI today. tool_choice forces the tool so the model can't
+    // just answer from memory and return zero sources.
+    const response = await openai.responses.create({
       model: "gpt-4o-mini",
-      max_tokens: 512,
-      messages: [{ role: "user", content: prompt }],
+      input: prompt,
+      tools: [{ type: "web_search_preview" }],
+      tool_choice: { type: "web_search_preview" },
+      max_output_tokens: 600,
     });
-    const text = completion.choices[0]?.message?.content;
-    if (text == null) {
-      console.error("OpenAI API error: missing message content in response");
-      return { text: null, sources: [] };
-    }
-    const annotations = completion.choices[0]?.message?.annotations;
-    const fromAnn = [];
-    if (Array.isArray(annotations)) {
-      for (const a of annotations) {
-        const u = a?.url_citation?.url || a?.url;
-        if (u) fromAnn.push(String(u));
+
+    const text =
+      typeof response.output_text === "string" && response.output_text.length > 0
+        ? response.output_text
+        : null;
+
+    const sources = [];
+    for (const item of response.output || []) {
+      if (item.type !== "message") continue;
+      for (const part of item.content || []) {
+        if (part.type !== "output_text") continue;
+        for (const ann of part.annotations || []) {
+          const u = ann?.url || ann?.url_citation?.url;
+          if (u) sources.push(String(u));
+        }
       }
     }
-    const sources = [...new Set(fromAnn)];
-    return { text, sources };
+
+    if (text == null) {
+      console.error("OpenAI API error: missing message content in response");
+      return { text: null, sources: [...new Set(sources)] };
+    }
+    return { text, sources: [...new Set(sources)] };
   } catch (err) {
     console.error("OpenAI API error:", err.message || err);
     return { text: null, sources: [] };
@@ -186,9 +243,10 @@ async function queryGemini(prompt) {
 
     let result;
     if (GEMINI_GROUNDING) {
+      // Gemini 2.x uses `googleSearch` (1.5 used `googleSearchRetrieval`).
       result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: userText }] }],
-        tools: [{ googleSearchRetrieval: {} }],
+        tools: [{ googleSearch: {} }],
       });
     } else {
       // Same as SDK docs: pass the prompt string directly (matches OpenAI user message).

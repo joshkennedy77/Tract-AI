@@ -440,6 +440,7 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
   margin-bottom: 1rem;
+  align-items: start;
 }
 
 .metric-card {
@@ -461,6 +462,7 @@ a {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
+  align-items: start;
 }
 
 .metric-block {
@@ -496,18 +498,18 @@ a {
 }
 
 .metric-card-sources h3 {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .metric-sources-inner {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  align-items: stretch;
+  align-items: start;
   gap: 0;
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-sm);
   background: var(--white);
-  padding: 0.85rem 0.65rem;
+  padding: 0 0.65rem;
 }
 
 .metric-sources-col {
@@ -584,9 +586,15 @@ a {
 .ring-wrap {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
+}
+.ring-wrap > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
 }
 
 .mini-ring {
@@ -647,9 +655,10 @@ a {
 
 .panel-card h3 {
   margin: 0 0 1rem;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--slate-900);
+  letter-spacing: -0.005em;
 }
 
 .chart-tabs {
@@ -798,8 +807,13 @@ a {
   justify-content: flex-end;
   height: 100%;
   min-width: 0;
-  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  background: linear-gradient(
+    90deg,
+    var(--bar-from, #3b82f6),
+    var(--bar-to, #2563eb)
+  );
   border-radius: 5px;
+  transition: width 320ms ease;
 }
 
 .visibility-bar-tip {
@@ -1474,3 +1488,267 @@ a {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 .tract-companies-table td, .tract-companies-table th { vertical-align: middle; }
+
+/* —— Brand profiles (Run Audit) —— */
+.brand-profiles-details {
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  background: var(--slate-50, #f8fafc);
+}
+.brand-profiles-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.brand-profiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0 0.25rem;
+}
+.brand-profile-row {
+  border: 1px dashed var(--slate-200);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  background: #fff;
+}
+.brand-profile-row.is-dim { opacity: 0.55; }
+.brand-profile-row .field { margin: 0.45rem 0; }
+.brand-profile-row textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 9px;
+  border: 1px solid var(--slate-300, #cbd5e1);
+  border-radius: 6px;
+  background: var(--white);
+  resize: vertical;
+}
+
+/* —— Score cards row (Tract + AEO + GEO) —— */
+.score-cards-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 2fr 2fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+@media (max-width: 1100px) {
+  .score-cards-row { grid-template-columns: 1fr; }
+}
+
+.score-brand-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  background: var(--slate-50, #f8fafc);
+}
+.score-brand-filter.is-hidden { display: none; }
+.score-brand-filter label,
+.score-brand-filter label strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--slate-900);
+}
+.score-brand-filter select {
+  font: inherit;
+  font-size: 14px;
+  padding: 5px 9px;
+  border: 1px solid var(--slate-300, #cbd5e1);
+  border-radius: 6px;
+  background: var(--white);
+}
+
+.tract-score-card {
+  --card-accent: #2563eb;
+  --card-accent-soft: rgba(37, 99, 235, 0.12);
+  border-left: 4px solid var(--card-accent);
+}
+.tract-score-card h3 { font-size: 18px; font-weight: 700; }
+.tract-score-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.tract-score-number {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--card-accent);
+}
+.tract-score-meta { font-size: 0.92rem; color: var(--slate-700); }
+
+.aeo-card {
+  --card-accent: #059669;
+  --card-accent-soft: rgba(5, 150, 105, 0.12);
+  border-left: 4px solid var(--card-accent);
+}
+.geo-card {
+  --card-accent: #7c3aed;
+  --card-accent-soft: rgba(124, 58, 237, 0.12);
+  border-left: 4px solid var(--card-accent);
+}
+.aeo-card h3,
+.geo-card h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.aeo-headline {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.5rem 0 0.75rem;
+}
+.aeo-score-meta {
+  font-size: 0.88rem;
+  color: var(--slate-700);
+}
+
+/* Score ring shared by AEO + GEO cards — picks up --card-accent. */
+.score-ring {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--card-accent, var(--slate-900));
+}
+.score-ring svg {
+  width: 120px;
+  height: 120px;
+  display: block;
+}
+.score-ring-track {
+  stroke: var(--card-accent-soft, rgba(15, 23, 42, 0.08));
+}
+.score-ring-arc {
+  stroke: currentColor;
+  transition: stroke-dasharray 320ms ease;
+}
+.score-ring-number {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  fill: currentColor;
+}
+.score-ring-sub {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--slate-500, #64748b);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.score-ring-caption {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
+.aeo-mix {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0.75rem;
+}
+.aeo-mix .pill {
+  background: var(--card-accent-soft, rgba(15, 23, 42, 0.08));
+}
+.aeo-breakdown-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.aeo-block {
+  background: var(--card-accent-soft, var(--slate-50));
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin-top: 0.5rem;
+}
+.aeo-block h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate-700);
+}
+
+/* Plain-English explanations on AEO/GEO/Tract cards. */
+.score-explain {
+  margin: 0.15rem 0 0.85rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--slate-700);
+}
+.score-explain strong { color: var(--slate-900); }
+.aeo-block-help {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--slate-600);
+}
+.aeo-block-help strong { color: var(--slate-800); }
+.aeo-headline-help {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--slate-600);
+}
+/* Horizontal score lines used in AEO/GEO "By engine" + "By intent" blocks.
+   Each row is: label · 0–100 line · value · row count. Color picks up the
+   card's --card-accent so AEO is emerald and GEO is purple. */
+.score-line-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.score-line-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(60px, 2.4fr) 32px auto;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.85rem;
+}
+.score-line-label {
+  color: var(--slate-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.score-line-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--card-accent-soft, rgba(15, 23, 42, 0.08));
+  overflow: hidden;
+}
+.score-line-fill {
+  height: 100%;
+  background: var(--card-accent, var(--slate-700));
+  border-radius: inherit;
+  transition: width 320ms ease;
+}
+.score-line-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--card-accent, var(--slate-900));
+  text-align: right;
+}
+.score-line-meta {
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.aeo-trend {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--card-accent, var(--slate-700));
+}
+.aeo-trend svg { width: 220px; height: 48px; }
+.aeo-trend .muted { color: var(--slate-600); }

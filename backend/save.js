@@ -26,6 +26,15 @@ async function saveResult(data) {
       ? Math.max(0, Number(data.source_count) || 0)
       : sources.length;
 
+  const aeoScoreRaw =
+    data.aeo_score != null && data.aeo_score !== ""
+      ? Math.max(0, Math.min(100, Math.round(Number(data.aeo_score) || 0)))
+      : null;
+  const geoScoreRaw =
+    data.geo_score != null && data.geo_score !== ""
+      ? Math.max(0, Math.min(100, Math.round(Number(data.geo_score) || 0)))
+      : null;
+
   const row = {
     scan_id: scanId,
     ...(data.comparison_id
@@ -42,6 +51,16 @@ async function saveResult(data) {
     competitors_mentioned: data.competitors_mentioned,
     source_count: sourceCount,
     sources,
+    ...(data.intent ? { intent: String(data.intent) } : {}),
+    ...(data.aeo_analysis !== undefined
+      ? { aeo_analysis: data.aeo_analysis || {} }
+      : {}),
+    ...(aeoScoreRaw != null ? { aeo_score: aeoScoreRaw } : {}),
+    ...(data.aeo_error ? { aeo_error: String(data.aeo_error).slice(0, 500) } : {}),
+    ...(data.geo_analysis !== undefined
+      ? { geo_analysis: data.geo_analysis || {} }
+      : {}),
+    ...(geoScoreRaw != null ? { geo_score: geoScoreRaw } : {}),
   };
 
   const { error } = await supabase.from("scans").insert(row);

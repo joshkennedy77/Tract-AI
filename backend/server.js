@@ -21,6 +21,7 @@ const cors = require("cors");
 
 const {
   getPrompts,
+  getPromptsTagged,
   getPromptTemplates,
   setPromptTemplates,
 } = require("./prompts.js");
@@ -34,6 +35,14 @@ const {
 const { analyzeResponse } = require("./analyze.js");
 const { saveResult } = require("./save.js");
 const supabase = require("./supabaseClient.js");
+const { judge: aeoJudge } = require("./judge.js");
+const { computeAeoScore } = require("./aeo.js");
+const { analyzeGeo } = require("./geo.js");
+const {
+  getProfilesForCompany,
+  resolveProfilesForBrands,
+  upsertProfilesForCompany,
+} = require("./brandProfiles.js");
 const {
   requireUser,
   requireCompany,
@@ -153,11 +162,184 @@ app.get("/api/scans", requireUser, requireCompany, async (req, res) => {
   res.json({ scans: filterIgnoredBrands(data || []) });
 });
 
+// AEO/GEO aggregation helpers (also mirrored client-side for session-only
+// audits). Average / breakdown logic lives in one place so /api/stats and
+// statsFromAudit() return identical shapes.
+
+function avgRounded(nums) {
+  const arr = nums.filter((n) => Number.isFinite(n));
+  if (arr.length === 0) return null;
+  return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+}
+
+function buildAeoStatsForGroup(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return {
+      n: 0,
+      judged: 0,
+      score: null,
+      mix: { recommended: 0, mentioned: 0, negative: 0, omitted: 0 },
+      avgAccuracy: null,
+      byEngine: [],
+      byIntent: [],
+      trend: [],
+    };
+  }
+  const scores = [];
+  const accs = [];
+  const mix = { recommended: 0, mentioned: 0, negative: 0, omitted: 0 };
+  let judged = 0;
+  const byEngineMap = new Map();
+  const byIntentMap = new Map();
+  const dayMap = new Map();
+  for (const r of rows) {
+    const a = r.aeo_analysis || {};
+    const s = r.aeo_score;
+    const hasAeo = a && Object.keys(a).length > 0;
+    if (hasAeo) judged += 1;
+    const rec = String(a.recommendation || "omitted").toLowerCase();
+    if (mix[rec] != null) mix[rec] += 1;
+    if (Number.isFinite(s)) scores.push(Number(s));
+    if (Number.isFinite(Number(a.accuracy_score))) accs.push(Number(a.accuracy_score));
+
+    const eng = r.engine || "(unknown)";
+    if (!byEngineMap.has(eng)) byEngineMap.set(eng, []);
+    if (Number.isFinite(s)) byEngineMap.get(eng).push(Number(s));
+
+    const it = r.intent || "other";
+    if (!byIntentMap.has(it)) byIntentMap.set(it, []);
+    if (Number.isFinite(s)) byIntentMap.get(it).push(Number(s));
+
+    const day =
+      r.created_at && typeof r.created_at === "string"
+        ? r.created_at.slice(0, 10)
+        : null;
+    if (day) {
+      if (!dayMap.has(day)) dayMap.set(day, []);
+      if (Number.isFinite(s)) dayMap.get(day).push(Number(s));
+    }
+  }
+  const byEngine = [...byEngineMap.entries()]
+    .map(([engine, arr]) => ({ engine, n: arr.length, score: avgRounded(arr) }))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const byIntent = [...byIntentMap.entries()]
+    .map(([intent, arr]) => ({ intent, n: arr.length, score: avgRounded(arr) }))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const trend = [...dayMap.entries()]
+    .map(([day, arr]) => ({ day, n: arr.length, score: avgRounded(arr) }))
+    .sort((a, b) => a.day.localeCompare(b.day));
+  return {
+    n: rows.length,
+    judged,
+    score: avgRounded(scores),
+    mix,
+    avgAccuracy: avgRounded(accs),
+    byEngine,
+    byIntent,
+    trend,
+  };
+}
+
+function buildGeoStatsForGroup(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return {
+      n: 0,
+      scored: 0,
+      score: null,
+      ownDomainRate: 0,
+      anyCitationRate: 0,
+      avgAuthority: null,
+      byEngine: [],
+      byIntent: [],
+      trend: [],
+    };
+  }
+  const scores = [];
+  const auths = [];
+  let scored = 0;
+  let ownN = 0;
+  let anyN = 0;
+  const byEngineMap = new Map();
+  const byIntentMap = new Map();
+  const dayMap = new Map();
+  for (const r of rows) {
+    const a = r.geo_analysis || {};
+    const s = r.geo_score;
+    if (Number.isFinite(s)) {
+      scores.push(Number(s));
+      scored += 1;
+    }
+    if (a.own_domain_cited) ownN += 1;
+    if ((a.citation_count || 0) > 0) anyN += 1;
+    if (Number.isFinite(Number(a.avg_authority))) auths.push(Number(a.avg_authority));
+
+    const eng = r.engine || "(unknown)";
+    if (!byEngineMap.has(eng)) byEngineMap.set(eng, []);
+    if (Number.isFinite(s)) byEngineMap.get(eng).push(Number(s));
+
+    const it = r.intent || "other";
+    if (!byIntentMap.has(it)) byIntentMap.set(it, []);
+    if (Number.isFinite(s)) byIntentMap.get(it).push(Number(s));
+
+    const day =
+      r.created_at && typeof r.created_at === "string"
+        ? r.created_at.slice(0, 10)
+        : null;
+    if (day) {
+      if (!dayMap.has(day)) dayMap.set(day, []);
+      if (Number.isFinite(s)) dayMap.get(day).push(Number(s));
+    }
+  }
+  const byEngine = [...byEngineMap.entries()]
+    .map(([engine, arr]) => ({ engine, n: arr.length, score: avgRounded(arr) }))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const byIntent = [...byIntentMap.entries()]
+    .map(([intent, arr]) => ({ intent, n: arr.length, score: avgRounded(arr) }))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const trend = [...dayMap.entries()]
+    .map(([day, arr]) => ({ day, n: arr.length, score: avgRounded(arr) }))
+    .sort((a, b) => a.day.localeCompare(b.day));
+  return {
+    n: rows.length,
+    scored,
+    score: avgRounded(scores),
+    ownDomainRate: rows.length === 0 ? 0 : Math.round((ownN / rows.length) * 100),
+    anyCitationRate: rows.length === 0 ? 0 : Math.round((anyN / rows.length) * 100),
+    avgAuthority: avgRounded(auths),
+    byEngine,
+    byIntent,
+    trend,
+  };
+}
+
+function computeTractScore(aeoScore, geoScore) {
+  const aeoOk = Number.isFinite(Number(aeoScore));
+  const geoOk = Number.isFinite(Number(geoScore));
+  if (!aeoOk && !geoOk) return null;
+  if (aeoOk && !geoOk) return Math.round(Number(aeoScore));
+  if (!aeoOk && geoOk) return Math.round(Number(geoScore));
+  return Math.round(Number(aeoScore) * 0.55 + Number(geoScore) * 0.45);
+}
+
+function aggregatePerBrand(rows, builder) {
+  const byBrand = new Map();
+  for (const r of rows) {
+    const b = String(r.brand || "(unknown)");
+    if (!byBrand.has(b)) byBrand.set(b, []);
+    byBrand.get(b).push(r);
+  }
+  const out = {};
+  for (const [brand, group] of byBrand.entries()) {
+    out[brand] = builder(group);
+  }
+  return out;
+}
+
 app.get("/api/stats", requireUser, requireCompany, async (req, res) => {
   const { data, error } = await supabase
     .from("scans")
     .select(
-      "brand, sentiment, brand_mentioned, engine, scan_id, competitors_mentioned, source_count"
+      "brand, sentiment, brand_mentioned, engine, scan_id, competitors_mentioned, source_count, intent, aeo_score, aeo_analysis, geo_score, geo_analysis, created_at"
     )
     .eq("company_id", req.user.company_id);
 
@@ -287,6 +469,19 @@ app.get("/api/stats", requireUser, requireCompany, async (req, res) => {
     }))
     .sort((a, b) => b.totalSources - a.totalSources);
 
+  const aeoOverall = buildAeoStatsForGroup(rows);
+  const aeoPerBrand = aggregatePerBrand(rows, buildAeoStatsForGroup);
+  const geoOverall = buildGeoStatsForGroup(rows);
+  const geoPerBrand = aggregatePerBrand(rows, buildGeoStatsForGroup);
+  const tractOverall = computeTractScore(aeoOverall.score, geoOverall.score);
+  const tractPerBrand = {};
+  for (const brand of Object.keys(aeoPerBrand)) {
+    tractPerBrand[brand] = computeTractScore(
+      aeoPerBrand[brand]?.score,
+      geoPerBrand[brand]?.score
+    );
+  }
+
   res.json({
     totalScans: rows.length,
     uniqueScanBatches: scanIds.size,
@@ -321,6 +516,9 @@ app.get("/api/stats", requireUser, requireCompany, async (req, res) => {
     engineMentionRates,
     brandComparison,
     sourcesByEngine,
+    aeo: { overall: aeoOverall, byBrand: aeoPerBrand },
+    geo: { overall: geoOverall, byBrand: geoPerBrand },
+    tractScore: { overall: tractOverall, byBrand: tractPerBrand },
   });
 });
 
@@ -367,12 +565,24 @@ app.post("/api/scan", requireUser, requireCompany, async (req, res) => {
   const scanIds = [];
   const results = [];
 
+  // Brand profiles: persisted facts + domains, optionally overridden by request.
+  const dbProfiles = await getProfilesForCompany(req.user.company_id);
+  const profiles = resolveProfilesForBrands(
+    brandsList,
+    dbProfiles,
+    req.body?.brandProfiles
+  );
+
   for (const brand of brandsList) {
-    const prompts = getPrompts(brand);
+    const profile = profiles.get(String(brand).toLowerCase()) || {
+      domains: [],
+      facts: "",
+    };
+    const prompts = getPromptsTagged(brand);
     const scanRunId = crypto.randomUUID();
     scanIds.push(scanRunId);
 
-    for (const prompt of prompts) {
+    for (const { text: prompt, intent } of prompts) {
       // Engines run concurrently per prompt — they're independent third-party
       // calls. Promise.all preserves input order so the results array stays
       // deterministic (brand → prompt → engine).
@@ -394,6 +604,37 @@ app.post("/api/scan", requireUser, requireCompany, async (req, res) => {
               ? `[${label} error] ${engineError.slice(0, 400)}`
               : "(No response)";
 
+          // AEO judge: only run when we got a real answer (saves cost on
+          // engine errors). Pass verified brand facts so accuracy_score can
+          // ground in them rather than the model's own priors.
+          let aeoAnalysis = null;
+          let aeoScore = null;
+          let aeoError = null;
+          if (responseText && responseText.trim()) {
+            const judged = await aeoJudge({
+              brand,
+              intent,
+              engine: label,
+              prompt,
+              response: responseText,
+              brandFacts: profile.facts,
+            });
+            aeoAnalysis = judged.analysis;
+            aeoError = judged.error;
+            aeoScore = computeAeoScore(aeoAnalysis);
+          }
+
+          // GEO: cheap, deterministic — always run (uses engine sources +
+          // AEO recommendation signal when available).
+          const geo = analyzeGeo({
+            sources,
+            brandDomains: profile.domains,
+            brandMentioned: analysis.brand_mentioned,
+            aeoAnalysis,
+          });
+          const geoAnalysis = geo.analysis;
+          const geoScore = geo.score;
+
           let save = { ok: true };
           if (PERSIST_SCANS) {
             save = await saveResult({
@@ -410,6 +651,12 @@ app.post("/api/scan", requireUser, requireCompany, async (req, res) => {
               competitors_mentioned: analysis.competitors_mentioned,
               sources,
               source_count,
+              intent,
+              aeo_analysis: aeoAnalysis,
+              aeo_score: aeoScore,
+              aeo_error: aeoError,
+              geo_analysis: geoAnalysis,
+              geo_score: geoScore,
             });
           }
 
@@ -419,6 +666,7 @@ app.post("/api/scan", requireUser, requireCompany, async (req, res) => {
             comparison_id: comparisonId,
             engine: label,
             prompt,
+            intent,
             response: responseFull,
             source_count,
             sources,
@@ -427,12 +675,23 @@ app.post("/api/scan", requireUser, requireCompany, async (req, res) => {
             saveError: save.ok ? undefined : save.error,
             engineError,
             analysis,
+            aeo_analysis: aeoAnalysis,
+            aeo_score: aeoScore,
+            aeo_error: aeoError,
+            geo_analysis: geoAnalysis,
+            geo_score: geoScore,
             preview: (responseText || responseFull).slice(0, 320),
           };
         })
       );
       results.push(...perEngine);
     }
+  }
+
+  // Persist any new brand profile data the user typed in the form (only when
+  // scans are also being persisted — keeps dry-run mode side-effect free).
+  if (PERSIST_SCANS) {
+    await upsertProfilesForCompany(req.user.company_id, req.user.id, profiles);
   }
 
   const saved = PERSIST_SCANS ? results.filter((r) => r.ok).length : 0;
@@ -452,6 +711,15 @@ app.post("/api/scan", requireUser, requireCompany, async (req, res) => {
     ),
   ].slice(0, 5);
 
+  const judged = results.filter((r) => r.aeo_analysis).length;
+  const geoScored = results.filter((r) => r.geo_score != null).length;
+
+  const brandProfilesPayload = [...profiles.values()].map((p) => ({
+    brand: p.brand,
+    domains: p.domains,
+    facts: p.facts,
+  }));
+
   res.json({
     brands: brandsList,
     brand: brandsList[0],
@@ -462,11 +730,63 @@ app.post("/api/scan", requireUser, requireCompany, async (req, res) => {
     engines: engines.map((k) => ENGINE_FNS[k].label),
     saved,
     total: results.length,
+    judged,
+    geoScored,
     saveErrors,
     engineErrors,
+    brandProfiles: brandProfilesPayload,
     results,
   });
 });
+
+// ---------------------------------------------------------------------------
+// Brand profiles (domains + verified facts) — GET/PUT
+// ---------------------------------------------------------------------------
+
+app.get(
+  "/api/brand-profiles",
+  requireUser,
+  requireCompany,
+  async (req, res) => {
+    const profiles = await getProfilesForCompany(req.user.company_id);
+    const payload = [...profiles.values()].map((p) => ({
+      brand: p.brand,
+      domains: Array.isArray(p.domains) ? p.domains : [],
+      facts: String(p.facts || ""),
+    }));
+    res.json({ brandProfiles: payload });
+  }
+);
+
+app.put(
+  "/api/brand-profiles",
+  requireUser,
+  requireCompany,
+  async (req, res) => {
+    const incoming = Array.isArray(req.body?.brandProfiles)
+      ? req.body.brandProfiles
+      : [];
+    const brands = incoming
+      .map((p) => String(p?.brand || "").trim())
+      .filter(Boolean);
+    if (brands.length === 0) {
+      return res.status(400).json({ error: "brandProfiles[] is required" });
+    }
+    const dbProfiles = await getProfilesForCompany(req.user.company_id);
+    const merged = resolveProfilesForBrands(brands, dbProfiles, incoming);
+    const out = await upsertProfilesForCompany(
+      req.user.company_id,
+      req.user.id,
+      merged
+    );
+    if (!out.ok) return res.status(500).json({ error: out.error });
+    const refreshed = await getProfilesForCompany(req.user.company_id);
+    res.json({
+      written: out.written,
+      brandProfiles: [...refreshed.values()],
+    });
+  }
+);
 
 // ---------------------------------------------------------------------------
 // Company-admin: Team management (PR-2)

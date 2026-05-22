@@ -145,19 +145,31 @@ function brandInitials(name) {
   return String(name || "?").slice(0, 2).toUpperCase();
 }
 
+/** Same-hue blue palette (navy → sky) cycled per row so bars are visually
+ *  distinct without leaving the blue family. */
+const VISIBILITY_BAR_PALETTE = [
+  ["#1e3a8a", "#1d4ed8"], // navy
+  ["#1d4ed8", "#2563eb"], // deep blue
+  ["#2563eb", "#3b82f6"], // royal
+  ["#3b82f6", "#60a5fa"], // medium sky
+  ["#60a5fa", "#93c5fd"], // light sky
+];
+
 /** Horizontal bars from real mention-rate % (not a synthetic time series). */
 function renderVisibilityBarRows(barRows) {
   return barRows
-    .map((row) => {
+    .map((row, i) => {
       const pct = Math.min(100, Math.max(0, Number(row.pct) || 0));
       const label = escapeHtml(row.label || "—");
       const meta = row.meta ? escapeHtml(row.meta) : "";
       const width = pct > 0 ? Math.max(pct, 4) : 0;
       const tip = pct >= 14 ? `${pct}%` : "";
+      const [from, to] = VISIBILITY_BAR_PALETTE[i % VISIBILITY_BAR_PALETTE.length];
+      const style = `width:${width}%;--bar-from:${from};--bar-to:${to}`;
       return `<div class="visibility-bar-row">
         <span class="visibility-bar-label" title="${label}">${label}</span>
         <div class="visibility-bar-track" role="img" aria-label="${label}: ${pct}% visibility">
-          <div class="visibility-bar-fill" style="width:${width}%"><span class="visibility-bar-tip">${tip}</span></div>
+          <div class="visibility-bar-fill" style="${style}"><span class="visibility-bar-tip">${tip}</span></div>
         </div>
         <span class="visibility-bar-value" title="${meta}">${pct}%${meta ? ` <span class="muted">· ${meta}</span>` : ""}</span>
       </div>`;
@@ -573,6 +585,51 @@ export function mount(root) {
               </div>
             </div>
 
+            <div class="score-brand-filter" id="score-brand-filter">
+              <label for="score-brand-select"><strong>Show AEO &amp; GEO for:</strong></label>
+              <select id="score-brand-select"></select>
+            </div>
+
+            <div class="score-cards-row">
+              <div class="panel-card tract-score-card" id="tract-score-card">
+                <h3>Tract score</h3>
+                <p class="score-explain">
+                  One number that combines AEO and GEO so you can track how
+                  your brand is doing in AI answers overall.
+                  <span class="muted">(AEO 55% · GEO 45%)</span>
+                </p>
+                <div class="tract-score-body">
+                  <div class="tract-score-number" id="tract-score-number">—</div>
+                  <div class="tract-score-meta" id="tract-score-meta">No data yet.</div>
+                </div>
+              </div>
+              <div class="panel-card aeo-card" id="aeo-card">
+                <h3 id="aeo-card-title">AEO score</h3>
+                <p class="score-explain">
+                  <strong>AEO = Answer Engine Optimization.</strong>
+                  When an AI assistant answers a question about your brand,
+                  does it actually <em>recommend</em> you, how high up does
+                  it list you, and is what it says about you correct?
+                  Higher is better.
+                </p>
+                <div id="aeo-card-body" class="aeo-card-body">
+                  <p class="muted">No AEO judgements yet — run a scan.</p>
+                </div>
+              </div>
+              <div class="panel-card geo-card" id="geo-card">
+                <h3 id="geo-card-title">GEO score</h3>
+                <p class="score-explain">
+                  <strong>GEO = Generative Engine Optimization.</strong>
+                  When an AI links to its sources, how often is your own
+                  website cited, and how trustworthy are the sites it
+                  pulls from? Higher is better.
+                </p>
+                <div id="geo-card-body" class="geo-card-body">
+                  <p class="muted">No citation data yet.</p>
+                </div>
+              </div>
+            </div>
+
             <div class="ai-strip">
               <span>✨ Summary uses your <strong>latest audit</strong> in this browser when present; otherwise stored <code>scans</code> from the database.</span>
               <a href="#view-prompts" class="js-nav" data-view="prompts">View prompts</a>
@@ -663,6 +720,58 @@ export function mount(root) {
                 <input id="brand-4" type="text" placeholder="Optional" autocomplete="off" />
               </div>
               <p class="field-hint muted">Press <kbd>Enter</kbd> in Brand 1 or use Run scan. Duplicate names (ignoring case) are skipped.</p>
+
+              <details class="brand-profiles-details" id="brand-profiles-details">
+                <summary>Brand profiles <span class="muted">(domains &amp; facts — improves GEO + AEO accuracy)</span></summary>
+                <div class="brand-profiles-grid" id="brand-profiles-grid">
+                  <div class="brand-profile-row" data-profile-row="1">
+                    <p class="field-hint muted" style="margin:0">For <strong id="brand-profile-label-1">Brand 1</strong>:</p>
+                    <div class="field">
+                      <label for="brand-domains-1">Owned domains <span class="muted">(comma-separated)</span></label>
+                      <input id="brand-domains-1" type="text" placeholder="acme.com, acme.io" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                      <label for="brand-facts-1">Verified facts <span class="muted">(optional)</span></label>
+                      <textarea id="brand-facts-1" rows="2" placeholder="Headquartered in… Founded in… Products…"></textarea>
+                    </div>
+                  </div>
+                  <div class="brand-profile-row" data-profile-row="2">
+                    <p class="field-hint muted" style="margin:0">For <strong id="brand-profile-label-2">Brand 2</strong>:</p>
+                    <div class="field">
+                      <label for="brand-domains-2">Owned domains</label>
+                      <input id="brand-domains-2" type="text" placeholder="comma-separated" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                      <label for="brand-facts-2">Verified facts</label>
+                      <textarea id="brand-facts-2" rows="2"></textarea>
+                    </div>
+                  </div>
+                  <div class="brand-profile-row" data-profile-row="3">
+                    <p class="field-hint muted" style="margin:0">For <strong id="brand-profile-label-3">Brand 3</strong>:</p>
+                    <div class="field">
+                      <label for="brand-domains-3">Owned domains</label>
+                      <input id="brand-domains-3" type="text" placeholder="comma-separated" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                      <label for="brand-facts-3">Verified facts</label>
+                      <textarea id="brand-facts-3" rows="2"></textarea>
+                    </div>
+                  </div>
+                  <div class="brand-profile-row" data-profile-row="4">
+                    <p class="field-hint muted" style="margin:0">For <strong id="brand-profile-label-4">Brand 4</strong>:</p>
+                    <div class="field">
+                      <label for="brand-domains-4">Owned domains</label>
+                      <input id="brand-domains-4" type="text" placeholder="comma-separated" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                      <label for="brand-facts-4">Verified facts</label>
+                      <textarea id="brand-facts-4" rows="2"></textarea>
+                    </div>
+                  </div>
+                </div>
+                <p class="field-hint muted">Saved per company. Empty domains fall back to a guess like <code>{{brand}}.com</code>.</p>
+              </details>
+
               <fieldset class="engines-field">
                 <legend>Engines</legend>
                 <label class="check"><input type="checkbox" name="engine" value="anthropic" checked /> Claude</label>
@@ -818,7 +927,20 @@ export function mount(root) {
     scansBody: root.querySelector("#scans-body"),
     auditSessionNote: root.querySelector("#audit-session-note"),
     recentActivityHint: root.querySelector("#recent-activity-hint"),
+    scoreBrandFilter: root.querySelector("#score-brand-filter"),
+    scoreBrandSelect: root.querySelector("#score-brand-select"),
+    tractScoreNumber: root.querySelector("#tract-score-number"),
+    tractScoreMeta: root.querySelector("#tract-score-meta"),
+    aeoCardTitle: root.querySelector("#aeo-card-title"),
+    aeoCardBody: root.querySelector("#aeo-card-body"),
+    geoCardTitle: root.querySelector("#geo-card-title"),
+    geoCardBody: root.querySelector("#geo-card-body"),
   };
+
+  /** Last stats payload — used so the brand-filter dropdown can re-render
+   *  the score cards without re-fetching. */
+  let currentStats = null;
+  let currentScoreBrand = "__all__";
 
   /** Last `/api/scans` payload; used when opening a Supabase-backed study card. */
   let homeScansCache = [];
@@ -841,6 +963,7 @@ export function mount(root) {
       refreshPrompts();
     } else if (name === "brands") {
       refreshPrompts();
+      loadBrandProfilesIntoForm().then(refreshProfileLabels);
     } else if (name === "team") {
       loadTeamMembers();
     } else if (name === "tract-admin") {
@@ -954,6 +1077,7 @@ export function mount(root) {
       scan_id: row.scan_id || meta.scan_id,
       engine: row.engine,
       prompt: row.prompt,
+      intent: row.intent || "other",
       response:
         row.response != null && String(row.response).trim() !== ""
           ? String(row.response)
@@ -969,6 +1093,10 @@ export function mount(root) {
         row.source_count != null && row.source_count !== ""
           ? Math.max(0, Number(row.source_count) || 0)
           : 0,
+      aeo_score: row.aeo_score == null ? null : Number(row.aeo_score),
+      aeo_analysis: row.aeo_analysis || {},
+      geo_score: row.geo_score == null ? null : Number(row.geo_score),
+      geo_analysis: row.geo_analysis || {},
     }));
     return {
       at: t0,
@@ -1199,6 +1327,175 @@ export function mount(root) {
     return "Neutral";
   }
 
+  // -----------------------------------------------------------------------
+  // AEO / GEO aggregation (frontend mirror of backend helpers in server.js)
+  // Used so session-only audits get the same stat shape as DB-backed ones.
+  // -----------------------------------------------------------------------
+
+  function avgRounded(nums) {
+    const arr = nums.filter((n) => Number.isFinite(n));
+    if (arr.length === 0) return null;
+    return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+  }
+
+  function buildAeoStatsForGroup(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return {
+        n: 0, judged: 0, score: null,
+        mix: { recommended: 0, mentioned: 0, negative: 0, omitted: 0 },
+        avgAccuracy: null, byEngine: [], byIntent: [], trend: [],
+      };
+    }
+    const scores = [];
+    const accs = [];
+    const mix = { recommended: 0, mentioned: 0, negative: 0, omitted: 0 };
+    let judged = 0;
+    const byEngineMap = new Map();
+    const byIntentMap = new Map();
+    const dayMap = new Map();
+    for (const r of rows) {
+      const a = r.aeo_analysis || {};
+      const s = Number(r.aeo_score);
+      if (a && Object.keys(a).length > 0) judged += 1;
+      const rec = String(a.recommendation || "omitted").toLowerCase();
+      if (mix[rec] != null) mix[rec] += 1;
+      if (Number.isFinite(s)) scores.push(s);
+      if (Number.isFinite(Number(a.accuracy_score))) accs.push(Number(a.accuracy_score));
+      const eng = r.engine || "(unknown)";
+      if (!byEngineMap.has(eng)) byEngineMap.set(eng, []);
+      if (Number.isFinite(s)) byEngineMap.get(eng).push(s);
+      const it = r.intent || "other";
+      if (!byIntentMap.has(it)) byIntentMap.set(it, []);
+      if (Number.isFinite(s)) byIntentMap.get(it).push(s);
+      const day =
+        r.created_at && typeof r.created_at === "string"
+          ? r.created_at.slice(0, 10)
+          : null;
+      if (day) {
+        if (!dayMap.has(day)) dayMap.set(day, []);
+        if (Number.isFinite(s)) dayMap.get(day).push(s);
+      }
+    }
+    const byEngine = [...byEngineMap.entries()]
+      .map(([engine, arr]) => ({ engine, n: arr.length, score: avgRounded(arr) }))
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    const byIntent = [...byIntentMap.entries()]
+      .map(([intent, arr]) => ({ intent, n: arr.length, score: avgRounded(arr) }))
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    const trend = [...dayMap.entries()]
+      .map(([day, arr]) => ({ day, n: arr.length, score: avgRounded(arr) }))
+      .sort((a, b) => a.day.localeCompare(b.day));
+    return {
+      n: rows.length,
+      judged,
+      score: avgRounded(scores),
+      mix,
+      avgAccuracy: avgRounded(accs),
+      byEngine,
+      byIntent,
+      trend,
+    };
+  }
+
+  function buildGeoStatsForGroup(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return {
+        n: 0, scored: 0, score: null,
+        ownDomainRate: 0, anyCitationRate: 0, avgAuthority: null,
+        byEngine: [], byIntent: [], trend: [],
+      };
+    }
+    const scores = [];
+    const auths = [];
+    let scored = 0;
+    let ownN = 0;
+    let anyN = 0;
+    const byEngineMap = new Map();
+    const byIntentMap = new Map();
+    const dayMap = new Map();
+    for (const r of rows) {
+      const a = r.geo_analysis || {};
+      const s = Number(r.geo_score);
+      if (Number.isFinite(s)) { scores.push(s); scored += 1; }
+      if (a.own_domain_cited) ownN += 1;
+      if ((a.citation_count || 0) > 0) anyN += 1;
+      if (Number.isFinite(Number(a.avg_authority))) auths.push(Number(a.avg_authority));
+      const eng = r.engine || "(unknown)";
+      if (!byEngineMap.has(eng)) byEngineMap.set(eng, []);
+      if (Number.isFinite(s)) byEngineMap.get(eng).push(s);
+      const it = r.intent || "other";
+      if (!byIntentMap.has(it)) byIntentMap.set(it, []);
+      if (Number.isFinite(s)) byIntentMap.get(it).push(s);
+      const day =
+        r.created_at && typeof r.created_at === "string"
+          ? r.created_at.slice(0, 10)
+          : null;
+      if (day) {
+        if (!dayMap.has(day)) dayMap.set(day, []);
+        if (Number.isFinite(s)) dayMap.get(day).push(s);
+      }
+    }
+    const byEngine = [...byEngineMap.entries()]
+      .map(([engine, arr]) => ({ engine, n: arr.length, score: avgRounded(arr) }))
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    const byIntent = [...byIntentMap.entries()]
+      .map(([intent, arr]) => ({ intent, n: arr.length, score: avgRounded(arr) }))
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    const trend = [...dayMap.entries()]
+      .map(([day, arr]) => ({ day, n: arr.length, score: avgRounded(arr) }))
+      .sort((a, b) => a.day.localeCompare(b.day));
+    return {
+      n: rows.length,
+      scored,
+      score: avgRounded(scores),
+      ownDomainRate: rows.length === 0 ? 0 : Math.round((ownN / rows.length) * 100),
+      anyCitationRate: rows.length === 0 ? 0 : Math.round((anyN / rows.length) * 100),
+      avgAuthority: avgRounded(auths),
+      byEngine,
+      byIntent,
+      trend,
+    };
+  }
+
+  function computeTractScore(aeoScore, geoScore) {
+    const aeoOk = Number.isFinite(Number(aeoScore));
+    const geoOk = Number.isFinite(Number(geoScore));
+    if (!aeoOk && !geoOk) return null;
+    if (aeoOk && !geoOk) return Math.round(Number(aeoScore));
+    if (!aeoOk && geoOk) return Math.round(Number(geoScore));
+    return Math.round(Number(aeoScore) * 0.55 + Number(geoScore) * 0.45);
+  }
+
+  function aggregatePerBrand(rows, builder) {
+    const byBrand = new Map();
+    for (const r of rows) {
+      const b = String(r.brand || "(unknown)");
+      if (!byBrand.has(b)) byBrand.set(b, []);
+      byBrand.get(b).push(r);
+    }
+    const out = {};
+    for (const [brand, group] of byBrand.entries()) {
+      out[brand] = builder(group);
+    }
+    return out;
+  }
+
+  /** Build rows in the shape buildAeo/GeoStatsForGroup expects, from an audit. */
+  function rowsFromAudit(audit) {
+    const at = audit?.at || Date.now();
+    const iso = new Date(at).toISOString();
+    return (audit.results || []).map((r) => ({
+      brand: r.brand,
+      engine: r.engine,
+      intent: r.intent || "other",
+      aeo_score: r.aeo_score,
+      aeo_analysis: r.aeo_analysis || {},
+      geo_score: r.geo_score,
+      geo_analysis: r.geo_analysis || {},
+      created_at: iso,
+    }));
+  }
+
   function statsFromAudit(audit) {
     const brandsOrder =
       Array.isArray(audit.brands) && audit.brands.length > 0
@@ -1317,6 +1614,20 @@ export function mount(root) {
         dominantSentiment: x.dominantSentiment,
       }));
 
+    const scoreRows = rowsFromAudit(audit);
+    const aeoOverall = buildAeoStatsForGroup(scoreRows);
+    const aeoPerBrand = aggregatePerBrand(scoreRows, buildAeoStatsForGroup);
+    const geoOverall = buildGeoStatsForGroup(scoreRows);
+    const geoPerBrand = aggregatePerBrand(scoreRows, buildGeoStatsForGroup);
+    const tractOverall = computeTractScore(aeoOverall.score, geoOverall.score);
+    const tractPerBrand = {};
+    for (const brand of Object.keys(aeoPerBrand)) {
+      tractPerBrand[brand] = computeTractScore(
+        aeoPerBrand[brand]?.score,
+        geoPerBrand[brand]?.score
+      );
+    }
+
     return {
       totalScans: n,
       uniqueScanBatches: scanIds.size || (n ? 1 : 0),
@@ -1338,6 +1649,9 @@ export function mount(root) {
         .sort((a, b) => b[1] - a[1])
         .map(([engine, count]) => ({ engine, count })),
       engineMentionRates,
+      aeo: { overall: aeoOverall, byBrand: aeoPerBrand },
+      geo: { overall: geoOverall, byBrand: geoPerBrand },
+      tractScore: { overall: tractOverall, byBrand: tractPerBrand },
     };
   }
 
@@ -1371,6 +1685,370 @@ export function mount(root) {
               : 0,
       };
     });
+  }
+
+  // -----------------------------------------------------------------------
+  // Score card renderers (Tract / AEO / GEO)
+  // -----------------------------------------------------------------------
+
+  function intentLabel(it) {
+    const map = {
+      informational: "Informational",
+      comparison: "Comparison",
+      reputation: "Reputation",
+      recommendation: "Recommendation",
+      alternatives: "Alternatives",
+      best_of: "Best-of",
+      other: "Other",
+    };
+    return map[it] || it || "—";
+  }
+
+  function recommendationPill(rec, n, total) {
+    const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+    const cls =
+      rec === "recommended" ? "pill pill-pos"
+      : rec === "negative" ? "pill pill-neg"
+      : rec === "omitted" ? "pill pill-neu"
+      : "pill pill-neu";
+    return `<span class="${cls}" title="${pct}% of judged rows">${escapeHtml(rec)} · ${n}</span>`;
+  }
+
+  function renderAeoTrend(trend) {
+    if (!Array.isArray(trend) || trend.length === 0) {
+      return `<p class="muted">Trend over time will appear once you have audits from two or more days.</p>`;
+    }
+    if (trend.length === 1) {
+      const t = trend[0];
+      return `<p class="muted">Single day so far (<strong>${escapeHtml(t.day)}</strong> · ${t.score ?? "—"}). Re-run the audit later to build a trend.</p>`;
+    }
+    const max = 100;
+    const w = 320;
+    const h = 60;
+    const pad = 4;
+    const pts = trend.map((t, i) => {
+      const x = pad + (i * (w - pad * 2)) / Math.max(1, trend.length - 1);
+      const v = Number.isFinite(Number(t.score)) ? Number(t.score) : 0;
+      const y = h - pad - (v / max) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const poly = pts.join(" ");
+    const last = trend[trend.length - 1];
+    return `<div class="aeo-trend">
+      <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="AEO trend">
+        <polyline fill="none" stroke="currentColor" stroke-width="2" points="${poly}" />
+      </svg>
+      <span class="muted">${trend.length} days · latest ${escapeHtml(last.day)} ${last.score ?? "—"}</span>
+    </div>`;
+  }
+
+  function renderAeoBreakdown(title, items, keyName, helpText) {
+    if (!Array.isArray(items) || items.length === 0) return "";
+    const rows = items
+      .map((it) => {
+        const label =
+          keyName === "intent" ? intentLabel(it.intent) : it[keyName];
+        const raw = Number(it.score);
+        const hasScore = Number.isFinite(raw);
+        const pct = hasScore ? Math.max(0, Math.min(100, Math.round(raw))) : 0;
+        const fillWidth = hasScore ? (pct > 0 ? Math.max(pct, 2) : 0) : 0;
+        const value = hasScore ? String(pct) : "—";
+        return `<div class="score-line-row" role="img" aria-label="${escapeHtml(label || "—")} score ${value}">
+          <span class="score-line-label" title="${escapeHtml(label || "—")}">${escapeHtml(label || "—")}</span>
+          <div class="score-line-track">
+            <div class="score-line-fill" style="width:${fillWidth}%"></div>
+          </div>
+          <span class="score-line-value">${value}</span>
+          <span class="score-line-meta muted">${it.n} rows</span>
+        </div>`;
+      })
+      .join("");
+    return `<div class="aeo-block">
+      <h4>${escapeHtml(title)}</h4>
+      ${helpText ? `<p class="aeo-block-help muted">${escapeHtml(helpText)}</p>` : ""}
+      <div class="score-line-list">${rows}</div>
+    </div>`;
+  }
+
+  /** SVG ring (0–100). Uses currentColor so each card's --card-accent paints it. */
+  function renderScoreRing(score, sublabel) {
+    const pct =
+      Number.isFinite(Number(score))
+        ? Math.max(0, Math.min(100, Math.round(Number(score))))
+        : 0;
+    const hasScore = Number.isFinite(Number(score));
+    const r = 50;
+    const c = 2 * Math.PI * r;
+    const dash = (pct / 100) * c;
+    const display = hasScore ? String(pct) : "—";
+    return `<div class="score-ring" role="img" aria-label="Score ${display} of 100">
+      <svg viewBox="0 0 120 120">
+        <circle class="score-ring-track" cx="60" cy="60" r="${r}" fill="none" stroke-width="12" />
+        <circle class="score-ring-arc" cx="60" cy="60" r="${r}" fill="none" stroke-width="12"
+          stroke-linecap="round"
+          stroke-dasharray="${dash.toFixed(2)} ${c.toFixed(2)}"
+          transform="rotate(-90 60 60)" />
+        <text x="60" y="58" class="score-ring-number" text-anchor="middle" dominant-baseline="middle">${display}</text>
+        <text x="60" y="82" class="score-ring-sub" text-anchor="middle">/ 100</text>
+      </svg>
+      ${sublabel ? `<div class="score-ring-caption muted">${sublabel}</div>` : ""}
+    </div>`;
+  }
+
+  function renderAeoCard(stats, brandLabel) {
+    if (!stats || stats.n === 0 || stats.judged === 0) {
+      el.aeoCardTitle.textContent = `AEO score · ${brandLabel}`;
+      el.aeoCardBody.innerHTML = `<p class="muted">No AEO judgements yet — run a scan with <code>OPENAI_API_KEY</code> set.</p>`;
+      return;
+    }
+    const total = stats.judged || stats.n;
+    el.aeoCardTitle.textContent = `AEO score · ${brandLabel}`;
+    el.aeoCardBody.innerHTML = `
+      <div class="aeo-headline">
+        ${renderScoreRing(stats.score, `${stats.judged} judged`)}
+        <div class="aeo-score-meta">
+          <div><strong>${stats.judged}</strong> judged of ${stats.n} answers</div>
+          <div class="muted">Avg accuracy ${stats.avgAccuracy ?? "—"} / 100</div>
+          <p class="aeo-headline-help muted">
+            The ring shows the average AEO score (0–100) across every answer
+            we judged for this brand. Accuracy is how often the AI got its
+            facts right.
+          </p>
+        </div>
+      </div>
+      <p class="aeo-block-help muted">
+        How the AI treated your brand across all answers — was it
+        <strong>recommended</strong>, just <strong>mentioned</strong>,
+        spoken about <strong>negatively</strong>, or <strong>omitted</strong> entirely?
+      </p>
+      <div class="aeo-mix">
+        ${recommendationPill("recommended", stats.mix.recommended || 0, total)}
+        ${recommendationPill("mentioned",   stats.mix.mentioned   || 0, total)}
+        ${recommendationPill("negative",    stats.mix.negative    || 0, total)}
+        ${recommendationPill("omitted",     stats.mix.omitted     || 0, total)}
+      </div>
+      <div class="aeo-breakdown-row">
+        ${renderAeoBreakdown(
+          "By engine",
+          stats.byEngine,
+          "engine",
+          "Average AEO score broken down by which AI tool answered (ChatGPT, Claude, Gemini, etc.)."
+        )}
+        ${renderAeoBreakdown(
+          "By intent",
+          stats.byIntent,
+          "intent",
+          "Average AEO score by what kind of question was asked — e.g. comparisons, recommendations, reputation."
+        )}
+      </div>
+      <div class="aeo-block">
+        <h4>Trend over time</h4>
+        <p class="aeo-block-help muted">
+          How your AEO score is moving day to day. Re-run the audit
+          tomorrow to start seeing a line.
+        </p>
+        ${renderAeoTrend(stats.trend)}
+      </div>
+    `;
+  }
+
+  function renderGeoCard(stats, brandLabel) {
+    if (!stats || stats.n === 0) {
+      el.geoCardTitle.textContent = `GEO score · ${brandLabel}`;
+      el.geoCardBody.innerHTML = `<p class="muted">No citation data yet.</p>`;
+      return;
+    }
+    el.geoCardTitle.textContent = `GEO score · ${brandLabel}`;
+    el.geoCardBody.innerHTML = `
+      <div class="aeo-headline">
+        ${renderScoreRing(stats.score, `${stats.scored} scored`)}
+        <div class="aeo-score-meta">
+          <div><strong>${stats.scored}</strong> scored of ${stats.n} answers</div>
+          <div class="muted">Avg source authority ${stats.avgAuthority ?? "—"} / 100</div>
+          <p class="aeo-headline-help muted">
+            The ring shows the average GEO score (0–100). Source authority
+            measures how trustworthy the websites the AI cited are.
+          </p>
+        </div>
+      </div>
+      <p class="aeo-block-help muted">
+        <strong>Own domain</strong> = the AI cited your website.
+        <strong>Any citation</strong> = the AI linked to a source at all.
+        Both are shown as a share of all answers.
+      </p>
+      <div class="aeo-mix">
+        <span class="pill pill-pos" title="Answers citing one of the brand's owned domains">own domain · ${stats.ownDomainRate}%</span>
+        <span class="pill pill-neu" title="Answers with at least one citation">any citation · ${stats.anyCitationRate}%</span>
+      </div>
+      <div class="aeo-breakdown-row">
+        ${renderAeoBreakdown(
+          "By engine",
+          stats.byEngine,
+          "engine",
+          "Average GEO score broken down by which AI tool answered."
+        )}
+        ${renderAeoBreakdown(
+          "By intent",
+          stats.byIntent,
+          "intent",
+          "Average GEO score by the kind of question being asked."
+        )}
+      </div>
+      <div class="aeo-block">
+        <h4>Trend over time</h4>
+        <p class="aeo-block-help muted">
+          How your GEO score is moving day to day. Citations vary a lot
+          per engine, so use this for direction, not exact week-over-week
+          comparisons.
+        </p>
+        ${renderAeoTrend(stats.trend)}
+      </div>
+    `;
+  }
+
+  function renderTractScoreCard(score, brandLabel, aeoStats, geoStats) {
+    el.tractScoreNumber.textContent = score == null ? "—" : String(score);
+    const parts = [];
+    if (aeoStats?.score != null) parts.push(`AEO ${aeoStats.score}`);
+    if (geoStats?.score != null) parts.push(`GEO ${geoStats.score}`);
+    el.tractScoreMeta.innerHTML = parts.length
+      ? `<span>${brandLabel}</span> · <span class="muted">${parts.join(" · ")}</span>`
+      : `<span class="muted">No scored answers yet — run a scan.</span>`;
+  }
+
+  function populateScoreBrandSelector(stats) {
+    const sel = el.scoreBrandSelect;
+    if (!sel) return;
+    const brands = [
+      ...new Set([
+        ...(stats?.brandsOrder || []),
+        ...Object.keys(stats?.aeo?.byBrand || {}),
+        ...Object.keys(stats?.geo?.byBrand || {}),
+      ]),
+    ].filter(Boolean);
+    const filterWrap = el.scoreBrandFilter;
+    if (brands.length <= 1) {
+      if (filterWrap) filterWrap.classList.add("is-hidden");
+      sel.innerHTML = `<option value="__all__">All brands (pooled)</option>`;
+      currentScoreBrand = "__all__";
+      return;
+    }
+    if (filterWrap) filterWrap.classList.remove("is-hidden");
+    const opts = [`<option value="__all__">All brands (pooled)</option>`].concat(
+      brands.map(
+        (b) =>
+          `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`
+      )
+    );
+    sel.innerHTML = opts.join("");
+    if (
+      currentScoreBrand !== "__all__" &&
+      !brands.some((b) => b === currentScoreBrand)
+    ) {
+      currentScoreBrand = "__all__";
+    }
+    sel.value = currentScoreBrand;
+  }
+
+  function sliceScoreStatsForBrand(stats, brand) {
+    if (!stats) return { aeo: null, geo: null, score: null, brandLabel: "—" };
+    if (brand === "__all__" || !brand) {
+      return {
+        aeo: stats.aeo?.overall || null,
+        geo: stats.geo?.overall || null,
+        score: stats.tractScore?.overall ?? null,
+        brandLabel: "All brands",
+      };
+    }
+    return {
+      aeo: stats.aeo?.byBrand?.[brand] || null,
+      geo: stats.geo?.byBrand?.[brand] || null,
+      score: stats.tractScore?.byBrand?.[brand] ?? null,
+      brandLabel: brand,
+    };
+  }
+
+  function renderScoreCardsForCurrentBrand() {
+    if (!currentStats) return;
+    const slice = sliceScoreStatsForBrand(currentStats, currentScoreBrand);
+    renderTractScoreCard(slice.score, slice.brandLabel, slice.aeo, slice.geo);
+    renderAeoCard(slice.aeo, slice.brandLabel);
+    renderGeoCard(slice.geo, slice.brandLabel);
+  }
+
+  // -----------------------------------------------------------------------
+  // Brand-profile form helpers (domains + facts per audited brand)
+  // -----------------------------------------------------------------------
+
+  function parseDomainsCsv(value) {
+    return String(value || "")
+      .split(/[,\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  function getBrandProfilesFromForm() {
+    const out = [];
+    for (let i = 1; i <= 4; i++) {
+      const brandInput = root.querySelector(
+        i === 1 ? "#brand" : `#brand-${i}`
+      );
+      const brand = brandInput && String(brandInput.value || "").trim();
+      if (!brand) continue;
+      const domains = parseDomainsCsv(
+        root.querySelector(`#brand-domains-${i}`)?.value || ""
+      );
+      const facts = String(
+        root.querySelector(`#brand-facts-${i}`)?.value || ""
+      ).trim();
+      if (domains.length === 0 && !facts) continue;
+      out.push({ brand, domains, facts });
+    }
+    return out;
+  }
+
+  function applyBrandProfilesToForm(profiles) {
+    const byBrand = new Map();
+    for (const p of profiles || []) {
+      const k = String(p?.brand || "").trim().toLowerCase();
+      if (k) byBrand.set(k, p);
+    }
+    for (let i = 1; i <= 4; i++) {
+      const brandInput = root.querySelector(
+        i === 1 ? "#brand" : `#brand-${i}`
+      );
+      const brand = brandInput && String(brandInput.value || "").trim();
+      const p = brand ? byBrand.get(brand.toLowerCase()) : null;
+      const dEl = root.querySelector(`#brand-domains-${i}`);
+      const fEl = root.querySelector(`#brand-facts-${i}`);
+      if (!p) {
+        if (dEl) dEl.value = "";
+        if (fEl) fEl.value = "";
+        continue;
+      }
+      if (dEl) dEl.value = Array.isArray(p.domains) ? p.domains.join(", ") : "";
+      if (fEl) fEl.value = String(p.facts || "");
+    }
+  }
+
+  async function loadBrandProfilesIntoForm() {
+    try {
+      const out = await fetchJson(apiUrl("/api/brand-profiles"));
+      applyBrandProfilesToForm(out?.brandProfiles || []);
+    } catch {
+      /* not signed in / no profiles — silent */
+    }
+  }
+
+  function refreshProfileLabels() {
+    for (let i = 1; i <= 4; i++) {
+      const labelEl = root.querySelector(`#brand-profile-label-${i}`);
+      const brandInput = root.querySelector(i === 1 ? "#brand" : `#brand-${i}`);
+      const row = root.querySelector(`[data-profile-row="${i}"]`);
+      const v = brandInput ? String(brandInput.value || "").trim() : "";
+      if (labelEl) labelEl.textContent = v || `Brand ${i}`;
+      if (row) row.classList.toggle("is-dim", !v);
+    }
   }
 
   function applyStatsPayload(s, source) {
@@ -1449,10 +2127,23 @@ export function mount(root) {
     const sentScore =
       sumS === 0 ? 0 : Math.min(6, Math.round((positive / sumS) * 6));
     const posScore = Math.min(6, brandsN);
+    const aeoChip =
+      s.aeo?.overall?.score != null
+        ? `<span class="kpi-chip"><span class="dot ok"></span> AEO: ${s.aeo.overall.score}/100</span>`
+        : "";
+    const geoChip =
+      s.geo?.overall?.score != null
+        ? `<span class="kpi-chip"><span class="dot ok"></span> GEO: ${s.geo.overall.score}/100</span>`
+        : "";
+    const tractChip =
+      s.tractScore?.overall != null
+        ? `<span class="kpi-chip"><span class="dot ok"></span> Tract: ${s.tractScore.overall}/100</span>`
+        : "";
     el.ovKpiRow.innerHTML = `
       <span class="kpi-chip"><span class="dot ok"></span> Visibility: ${visScore}/6</span>
       <span class="kpi-chip"><span class="dot ${sentScore >= 3 ? "ok" : "warn"}"></span> Sentiment: ${sumS ? `${positive}/${sumS}` : "—"}</span>
       <span class="kpi-chip"><span class="dot ok"></span> Position: ${posScore}/6</span>
+      ${tractChip}${aeoChip}${geoChip}
     `;
 
     const bc = s.brandComparison || [];
@@ -1513,6 +2204,11 @@ export function mount(root) {
       : `<tr><td colspan="5" class="center muted">No scans yet — run one from Run Audit.</td></tr>`;
 
     el.badgeBrands.textContent = String(brandsN);
+
+    // Score cards (Tract / AEO / GEO) — driven by the brand selector.
+    currentStats = s;
+    populateScoreBrandSelector(s);
+    renderScoreCardsForCurrentBrand();
   }
 
   async function loadStats() {
@@ -1754,20 +2450,28 @@ export function mount(root) {
     el.scanStatus.textContent = "Running scan… this may take a few minutes.";
     showBanner("", "");
 
+    const brandProfiles = getBrandProfilesFromForm();
     try {
       const out = await fetchJson(apiUrl("/api/scan"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brands, engines }),
+        body: JSON.stringify({ brands, engines, brandProfiles }),
       });
       writeLatestAudit(out);
+      if (Array.isArray(out.brandProfiles)) {
+        applyBrandProfilesToForm(out.brandProfiles);
+      }
       const label =
         out.brands && out.brands.length > 1
           ? `${out.brands.length} brands (${out.brands.join(", ")})`
           : out.brands[0];
+      const extras = [];
+      if (out.judged != null) extras.push(`${out.judged} AEO-judged`);
+      if (out.geoScored != null) extras.push(`${out.geoScored} GEO-scored`);
+      const extraStr = extras.length ? ` · ${extras.join(", ")}` : "";
       el.scanStatus.textContent = out.persisted
-        ? `Finished: saved ${out.saved} of ${out.total} rows for ${label}.`
-        : `Finished: ${out.total} rows for ${label} (not saved — viewable in Test Results in this browser).`;
+        ? `Finished: saved ${out.saved} of ${out.total} rows for ${label}${extraStr}.`
+        : `Finished: ${out.total} rows for ${label}${extraStr} (not saved — viewable in Test Results in this browser).`;
       if (out.persisted && out.saved < out.total) {
         const hint =
           Array.isArray(out.saveErrors) && out.saveErrors.length > 0
@@ -1798,6 +2502,17 @@ export function mount(root) {
       runScanFromUi();
     }
   });
+
+  el.scoreBrandSelect?.addEventListener("change", (ev) => {
+    currentScoreBrand = String(ev.target.value || "__all__");
+    renderScoreCardsForCurrentBrand();
+  });
+
+  for (let i = 1; i <= 4; i++) {
+    const id = i === 1 ? "#brand" : `#brand-${i}`;
+    root.querySelector(id)?.addEventListener("input", refreshProfileLabels);
+  }
+  refreshProfileLabels();
 
   // ------- Auth bootstrap -------
   const gate = root.querySelector("#auth-gate");
