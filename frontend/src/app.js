@@ -381,6 +381,42 @@ export function mount(root) {
               </label>
               <button type="submit" class="btn-primary" id="auth-submit">Sign in</button>
             </form>
+            <p class="auth-footer">
+              <button type="button" class="linkish" id="auth-forgot-link">Forgot your password?</button>
+            </p>
+          </div>
+
+          <div id="auth-forgot-mode" class="is-hidden">
+            <h1 class="auth-title">Reset password</h1>
+            <p class="auth-sub">Enter your account email and we'll send you a link to choose a new one.</p>
+            <form id="auth-forgot-form" class="auth-form">
+              <label class="auth-field">
+                <span>Email</span>
+                <input type="email" id="auth-forgot-email" autocomplete="email" required />
+              </label>
+              <button type="submit" class="btn-primary" id="auth-forgot-submit">Send reset link</button>
+            </form>
+            <p id="auth-forgot-status" class="auth-info is-hidden" role="status"></p>
+            <p class="auth-footer">
+              <button type="button" class="linkish" id="auth-forgot-back">Back to sign in</button>
+            </p>
+          </div>
+
+          <div id="auth-recover-mode" class="is-hidden">
+            <h1 class="auth-title">Set a new password</h1>
+            <p class="auth-sub">You arrived from a password reset email. Choose a new password to finish signing in.</p>
+            <form id="auth-recover-form" class="auth-form">
+              <label class="auth-field">
+                <span>New password</span>
+                <input type="password" id="auth-recover-password" autocomplete="new-password" minlength="8" required />
+              </label>
+              <label class="auth-field">
+                <span>Confirm new password</span>
+                <input type="password" id="auth-recover-password-2" autocomplete="new-password" minlength="8" required />
+              </label>
+              <button type="submit" class="btn-primary" id="auth-recover-submit">Update password</button>
+            </form>
+            <p id="auth-recover-status" class="auth-info is-hidden" role="status"></p>
           </div>
 
           <div id="auth-nocompany-mode" class="is-hidden">
@@ -2586,12 +2622,16 @@ export function mount(root) {
   const gate = root.querySelector("#auth-gate");
   const gateLoading = root.querySelector("#auth-loading");
   const gateSignin = root.querySelector("#auth-signin-mode");
+  const gateForgot = root.querySelector("#auth-forgot-mode");
+  const gateRecover = root.querySelector("#auth-recover-mode");
   const gateNoCompany = root.querySelector("#auth-nocompany-mode");
   const gateError = root.querySelector("#auth-error");
 
   function showGateMode(mode) {
     gateLoading.classList.toggle("is-hidden", mode !== "loading");
     gateSignin.classList.toggle("is-hidden", mode !== "signin");
+    gateForgot.classList.toggle("is-hidden", mode !== "forgot");
+    gateRecover.classList.toggle("is-hidden", mode !== "recover");
     gateNoCompany.classList.toggle("is-hidden", mode !== "no-company");
     gate.classList.remove("is-hidden");
   }
@@ -2913,12 +2953,157 @@ export function mount(root) {
       location.reload();
     });
 
+  // ---- Forgot password flow ----
+  const forgotStatus = root.querySelector("#auth-forgot-status");
+  function setForgotStatus(msg, kind) {
+    if (!msg) {
+      forgotStatus.classList.add("is-hidden");
+      forgotStatus.textContent = "";
+      forgotStatus.classList.remove("auth-info-ok", "auth-info-err");
+      return;
+    }
+    forgotStatus.textContent = msg;
+    forgotStatus.classList.remove("is-hidden", "auth-info-ok", "auth-info-err");
+    if (kind === "ok") forgotStatus.classList.add("auth-info-ok");
+    else if (kind === "err") forgotStatus.classList.add("auth-info-err");
+  }
+
+  root.querySelector("#auth-forgot-link").addEventListener("click", () => {
+    setGateError("");
+    setForgotStatus("");
+    const prefill = root.querySelector("#auth-email")?.value?.trim() || "";
+    if (prefill) root.querySelector("#auth-forgot-email").value = prefill;
+    showGateMode("forgot");
+  });
+
+  root.querySelector("#auth-forgot-back").addEventListener("click", () => {
+    setGateError("");
+    setForgotStatus("");
+    showGateMode("signin");
+  });
+
+  root
+    .querySelector("#auth-forgot-form")
+    .addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      setGateError("");
+      setForgotStatus("");
+      const email = root.querySelector("#auth-forgot-email").value.trim();
+      if (!email) return;
+      const btn = root.querySelector("#auth-forgot-submit");
+      btn.disabled = true;
+      const prevLabel = btn.textContent;
+      btn.textContent = "Sending…";
+      // After clicking the reset link in the email, Supabase will redirect
+      // here with a recovery token in the URL hash. `detectSessionInUrl`
+      // (in supabase.js) consumes it and fires PASSWORD_RECOVERY below.
+      const redirectTo = `${window.location.origin}${window.location.pathname}`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      });
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+      if (error) {
+        setForgotStatus(error.message, "err");
+        return;
+      }
+      setForgotStatus(
+        `If an account exists for ${email}, a reset link is on its way. Check your inbox (and spam).`,
+        "ok",
+      );
+    });
+
+  // ---- Recovery flow (user clicks reset link in email) ----
+  const recoverStatus = root.querySelector("#auth-recover-status");
+  function setRecoverStatus(msg, kind) {
+    if (!msg) {
+      recoverStatus.classList.add("is-hidden");
+      recoverStatus.textContent = "";
+      recoverStatus.classList.remove("auth-info-ok", "auth-info-err");
+      return;
+    }
+    recoverStatus.textContent = msg;
+    recoverStatus.classList.remove(
+      "is-hidden",
+      "auth-info-ok",
+      "auth-info-err",
+    );
+    if (kind === "ok") recoverStatus.classList.add("auth-info-ok");
+    else if (kind === "err") recoverStatus.classList.add("auth-info-err");
+  }
+
+  let recoveryActive = false;
+
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") {
+      recoveryActive = true;
+      setGateError("");
+      setRecoverStatus("");
+      showGateMode("recover");
+    }
+  });
+
+  root
+    .querySelector("#auth-recover-form")
+    .addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      setRecoverStatus("");
+      const pw1 = root.querySelector("#auth-recover-password").value;
+      const pw2 = root.querySelector("#auth-recover-password-2").value;
+      if (pw1.length < 8) {
+        setRecoverStatus("Password must be at least 8 characters.", "err");
+        return;
+      }
+      if (pw1 !== pw2) {
+        setRecoverStatus("Passwords don't match.", "err");
+        return;
+      }
+      const btn = root.querySelector("#auth-recover-submit");
+      btn.disabled = true;
+      const prevLabel = btn.textContent;
+      btn.textContent = "Updating…";
+      const { error } = await supabase.auth.updateUser({ password: pw1 });
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+      if (error) {
+        setRecoverStatus(error.message, "err");
+        return;
+      }
+      setRecoverStatus(
+        "Password updated. Signing you in…",
+        "ok",
+      );
+      // Clear any recovery tokens that may still be in the URL.
+      try {
+        history.replaceState(null, "", window.location.pathname);
+      } catch (_) {}
+      setTimeout(() => location.reload(), 600);
+    });
+
   root.querySelector("#btn-signout").addEventListener("click", doSignOut);
   root
     .querySelector("#btn-signout-empty")
     .addEventListener("click", doSignOut);
 
+  function isRecoveryUrl() {
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    return (
+      hash.includes("type=recovery") ||
+      search.includes("type=recovery") ||
+      recoveryActive
+    );
+  }
+
   async function bootstrap() {
+    // If the user landed via the password reset email, stay on the
+    // "set a new password" screen instead of dropping them into the app.
+    if (isRecoveryUrl()) {
+      recoveryActive = true;
+      showGateMode("recover");
+      return;
+    }
+
     showGateMode("loading");
     let session = null;
     try {

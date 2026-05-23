@@ -1392,6 +1392,29 @@ a {
   color: #b42318;
   font-size: 13px;
 }
+.auth-info {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--slate-600, #475569);
+  line-height: 1.4;
+}
+.auth-info-ok {
+  color: #166534;
+}
+.auth-info-err {
+  color: #b42318;
+}
+.auth-footer {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 13px;
+}
+.auth-footer .linkish {
+  color: var(--brand-600, #2563eb);
+}
+.auth-footer .linkish:hover {
+  text-decoration: underline;
+}
 .auth-empty,
 #auth-nocompany-mode {
   font-size: 14px;
