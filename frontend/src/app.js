@@ -353,6 +353,7 @@ const ICON = {
   sources: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10"/></svg>`,
   brands: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
   tags: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/></svg>`,
+  recommendations: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>`,
   home: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
   team: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
   tract: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M15 9h.01M9 13h.01M15 13h.01M9 17h.01M15 17h.01"/></svg>`,
@@ -461,6 +462,7 @@ export function mount(root) {
               <a href="#view-brands" class="js-nav" data-view="brands">${ICON.brands} Run Audit <span class="badge" id="badge-brands">0</span></a>
             </li>
             <li><a href="#view-overview" class="js-nav" data-view="overview">${ICON.overview} Test Results</a></li>
+            <li><a href="#view-recommendations" class="js-nav" data-view="recommendations">${ICON.recommendations} Recommendations <span class="badge" id="badge-recs">0</span></a></li>
             <li><a href="#view-sources" class="js-nav" data-view="sources">${ICON.sources} Sources</a></li>
           </ul>
           <div class="side-section-label">Project</div>
@@ -843,6 +845,25 @@ export function mount(root) {
             </div>
           </section>
 
+          <section id="view-recommendations" class="view is-hidden" data-view-panel="recommendations">
+            <div class="page-title-row">
+              <h1 class="page-title">Recommendations</h1>
+            </div>
+            <p class="subview-lead" id="recs-lead">
+              Actionable steps to improve <strong id="recs-brand-label">Brand 1</strong>'s AEO and GEO scores from your latest audit.
+            </p>
+            <div class="recs-summary panel-card" id="recs-summary">
+              <div class="recs-summary-scores">
+                <span class="recs-pill recs-pill-tract">Tract <strong id="recs-tract-score">—</strong></span>
+                <span class="recs-pill recs-pill-aeo">AEO <strong id="recs-aeo-score">—</strong></span>
+                <span class="recs-pill recs-pill-geo">GEO <strong id="recs-geo-score">—</strong></span>
+              </div>
+            </div>
+            <div id="recs-list" class="recs-list" role="list">
+              <p class="muted">Loading recommendations…</p>
+            </div>
+          </section>
+
           <section id="view-tags" class="view is-hidden" data-view-panel="tags">
             <h2 class="subview-title">Tags</h2>
             <p class="subview-lead">Group scans and reports by campaign or product line — coming soon.</p>
@@ -965,6 +986,12 @@ export function mount(root) {
     scansBody: root.querySelector("#scans-body"),
     auditSessionNote: root.querySelector("#audit-session-note"),
     recentActivityHint: root.querySelector("#recent-activity-hint"),
+    recsList: root.querySelector("#recs-list"),
+    recsBrandLabel: root.querySelector("#recs-brand-label"),
+    recsTractScore: root.querySelector("#recs-tract-score"),
+    recsAeoScore: root.querySelector("#recs-aeo-score"),
+    recsGeoScore: root.querySelector("#recs-geo-score"),
+    badgeRecs: root.querySelector("#badge-recs"),
     scoreBrandFilter: root.querySelector("#score-brand-filter"),
     scoreBrandSelect: root.querySelector("#score-brand-select"),
     tractScoreNumber: root.querySelector("#tract-score-number"),
@@ -985,7 +1012,7 @@ export function mount(root) {
   /** Holds the latest or focused scan in this tab (see readLatestAudit). */
   let latestAuditMemory = null;
 
-  const views = ["home", "overview", "prompts", "sources", "brands", "tags", "team", "tract-admin"];
+  const views = ["home", "overview", "recommendations", "prompts", "sources", "brands", "tags", "team", "tract-admin"];
 
   function showView(name) {
     views.forEach((v) => {
@@ -1002,6 +1029,8 @@ export function mount(root) {
     } else if (name === "brands") {
       refreshPrompts();
       loadBrandProfilesIntoForm().then(refreshProfileLabels);
+    } else if (name === "recommendations") {
+      loadRecommendations();
     } else if (name === "team") {
       loadTeamMembers();
     } else if (name === "tract-admin") {
@@ -2190,6 +2219,9 @@ export function mount(root) {
 
     if (el.ovKpiRow) el.ovKpiRow.innerHTML = "";
     if (el.badgeBrands) el.badgeBrands.textContent = "0";
+    if (el.badgeRecs) el.badgeRecs.textContent = "0";
+    if (el.recsList)
+      el.recsList.innerHTML = `<p class="muted">Run an audit to see recommendations for Brand 1.</p>`;
 
     if (el.tractScoreNumber) el.tractScoreNumber.textContent = "—";
     if (el.tractScoreMeta) el.tractScoreMeta.textContent = "No data yet.";
@@ -2216,9 +2248,8 @@ export function mount(root) {
     const chartSent = root.querySelector("#chart-sentiment");
     if (chartSent) chartSent.innerHTML = "";
 
-    const lbBody = root.querySelector("#lb-body");
-    if (lbBody)
-      lbBody.innerHTML = `<tr><td colspan="4" class="center muted">No data yet.</td></tr>`;
+    if (el.leaderboardBody)
+      el.leaderboardBody.innerHTML = `<tr><td colspan="5" class="center muted">No scans yet — run one from Run Audit.</td></tr>`;
   }
 
   function applyStatsPayload(s, source) {
@@ -2459,6 +2490,77 @@ export function mount(root) {
       .join("");
   }
 
+  function renderRecommendationCard(rec) {
+    const areaLabel =
+      rec.area === "aeo" ? "AEO" : rec.area === "geo" ? "GEO" : "Overview";
+    const actions = (rec.actions || [])
+      .map((a) => `<li>${escapeHtml(a)}</li>`)
+      .join("");
+    return `<article class="rec-card rec-severity-${escapeHtml(rec.severity)}" role="listitem">
+      <div class="rec-card-head">
+        <span class="rec-area rec-area-${escapeHtml(rec.area)}">${escapeHtml(areaLabel)}</span>
+        <span class="rec-severity">${escapeHtml(rec.severity)}</span>
+      </div>
+      <h3 class="rec-title">${escapeHtml(rec.title)}</h3>
+      <p class="rec-evidence muted">${escapeHtml(rec.evidence)}</p>
+      <ul class="rec-actions">${actions}</ul>
+    </article>`;
+  }
+
+  async function loadRecommendations() {
+    if (!el.recsList) return;
+    el.recsList.innerHTML = `<p class="muted">Loading recommendations…</p>`;
+
+    const audit = readLatestAudit();
+    const payload = {};
+    if (audit?.results?.length) {
+      payload.brands =
+        Array.isArray(audit.brands) && audit.brands.length
+          ? audit.brands
+          : audit.brand
+            ? [audit.brand]
+            : [];
+      payload.results = audit.results;
+      payload.at = audit.at;
+      payload.brand = payload.brands[0] || audit.brand;
+    }
+
+    try {
+      const out = await fetchJson(apiUrl("/api/recommendations"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const brand = out?.brand || payload.brand || "Brand 1";
+      if (el.recsBrandLabel) el.recsBrandLabel.textContent = brand;
+
+      const tract = out?.tractScore;
+      const aeo = out?.aeo?.score;
+      const geo = out?.geo?.score;
+      if (el.recsTractScore)
+        el.recsTractScore.textContent =
+          tract == null ? "—" : `${tract}/100`;
+      if (el.recsAeoScore)
+        el.recsAeoScore.textContent = aeo == null ? "—" : `${aeo}/100`;
+      if (el.recsGeoScore)
+        el.recsGeoScore.textContent = geo == null ? "—" : `${geo}/100`;
+
+      const recs = Array.isArray(out?.recommendations) ? out.recommendations : [];
+      if (el.badgeRecs) el.badgeRecs.textContent = String(recs.length);
+
+      if (recs.length === 0) {
+        el.recsList.innerHTML = `<p class="muted">${escapeHtml(out?.message || "No recommendations yet — run an audit with Brand 1 filled in.")}</p>`;
+        return;
+      }
+
+      el.recsList.innerHTML = recs.map(renderRecommendationCard).join("");
+    } catch (e) {
+      el.recsList.innerHTML = `<p class="muted">Could not load recommendations: ${escapeHtml(e.message)}</p>`;
+      if (el.badgeRecs) el.badgeRecs.textContent = "0";
+    }
+  }
+
   async function loadScans() {
     const audit = readLatestAudit();
     if (audit?.results?.length) {
@@ -2640,6 +2742,7 @@ export function mount(root) {
         );
       }
       await refreshAll();
+      void loadRecommendations();
     } catch (e) {
       el.scanStatus.textContent = "";
       showBanner(`Scan failed: ${e.message}`, "err");

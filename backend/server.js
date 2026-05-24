@@ -49,6 +49,7 @@ const {
   requireCompanyAdmin,
   requireTractStaff,
 } = require("./middleware/auth.js");
+const { generateRecommendations } = require("./recommendations.js");
 
 const ENGINE_FNS = {
   anthropic: { label: "Claude", fn: queryAnthropic },
@@ -547,6 +548,214 @@ app.get("/api/stats", requireUser, requireCompany, async (req, res) => {
     geo: { overall: geoOverall, byBrand: geoPerBrand },
     tractScore: { overall: tractOverall, byBrand: tractPerBrand },
   });
+});
+
+function pickPrimaryBrand(brandsOrder, queryBrand) {
+  const q = String(queryBrand || "").trim();
+  if (q) return q;
+  const order = Array.isArray(brandsOrder) ? brandsOrder : [];
+  return order[0] || "";
+}
+
+function sessionResultsToScoreRows(results, brandsOrder, at) {
+  const iso = at ? new Date(at).toISOString() : new Date().toISOString();
+  return (results || []).map((r) => ({
+    brand: r.brand,
+    engine: r.engine,
+    intent: r.intent || "other",
+    aeo_score: r.aeo_score,
+    aeo_analysis: r.aeo_analysis || {},
+    geo_score: r.geo_score,
+    geo_analysis: r.geo_analysis || {},
+    created_at: iso,
+  }));
+}
+
+function buildRecommendationsPayload(rows, brand, profile, aeoPerBrand, geoPerBrand, tractPerBrand) {
+  const brandKey = Object.keys(aeoPerBrand).find(
+    (b) => b.toLowerCase() === brand.toLowerCase()
+  ) || brand;
+  const brandRows = rows.filter(
+    (r) => String(r.brand || "").toLowerCase() === brand.toLowerCase()
+  );
+  const aeo = aeoPerBrand[brandKey] || aeoPerBrand[brand] || {};
+  const geo = geoPerBrand[brandKey] || geoPerBrand[brand] || {};
+  const tractScore = tractPerBrand[brandKey] ?? tractPerBrand[brand] ?? null;
+
+  const competitorInsights = [];
+  for (const comp of Object.keys(aeoPerBrand)) {
+    if (comp.toLowerCase() === brand.toLowerCase()) continue;
+    const ca = aeoPerBrand[comp]?.score;
+    const cg = geoPerBrand[comp]?.score;
+    const myAeo = aeo.score;
+    const myGeo = geo.score;
+    if (Number.isFinite(ca) && Number.isFinite(myAeo) && ca - myAeo >= 15) {
+      competitorInsights.push({
+        competitor: comp,
+        metric: "AEO",
+        theirs: ca,
+        yours: myAeo,
+      });
+    }
+    if (Number.isFinite(cg) && Number.isFinite(myGeo) && cg - myGeo >= 15) {
+      competitorInsights.push({
+        competitor: comp,
+        metric: "GEO",
+        theirs: cg,
+        yours: myGeo,
+      });
+    }
+  }
+
+  const recommendations = generateRecommendations({
+    brand,
+    rows: brandRows,
+    profile,
+    aeo,
+    geo,
+    tractScore,
+    competitorInsights,
+  });
+
+  return {
+    brand,
+    tractScore,
+    aeo: { score: aeo.score ?? null, judged: aeo.judged ?? 0, mix: aeo.mix },
+    geo: {
+      score: geo.score ?? null,
+      ownDomainRate: geo.ownDomainRate ?? 0,
+      anyCitationRate: geo.anyCitationRate ?? 0,
+      avgAuthority: geo.avgAuthority ?? null,
+    },
+    recommendations,
+  };
+}
+
+app.post("/api/recommendations", requireUser, requireCompany, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const brandsOrder = Array.isArray(body.brands) && body.brands.length
+      ? body.brands.map((b) => String(b || "").trim()).filter(Boolean)
+      : body.brand
+        ? [String(body.brand).trim()]
+        : [];
+
+    if (Array.isArray(body.results) && body.results.length > 0) {
+      const brand = pickPrimaryBrand(brandsOrder, body.brand || req.query?.brand);
+      if (!brand) {
+        return res.json({
+          brand: null,
+          recommendations: [],
+          message: "No brand specified.",
+        });
+      }
+      const rows = sessionResultsToScoreRows(body.results, brandsOrder, body.at);
+      const aeoPerBrand = aggregatePerBrand(rows, buildAeoStatsForGroup);
+      const geoPerBrand = aggregatePerBrand(rows, buildGeoStatsForGroup);
+      const tractPerBrand = {};
+      for (const b of Object.keys(aeoPerBrand)) {
+        tractPerBrand[b] = computeTractScore(
+          aeoPerBrand[b]?.score,
+          geoPerBrand[b]?.score
+        );
+      }
+      let profile = { domains: [], facts: "" };
+      try {
+        const profiles = await getProfilesForCompany(req.user.company_id);
+        const hit = profiles?.get?.(brand.toLowerCase());
+        if (hit) {
+          profile = {
+            domains: Array.isArray(hit.domains) ? hit.domains : [],
+            facts: String(hit.facts || ""),
+          };
+        }
+      } catch (_) {
+        /* brand_profiles table optional */
+      }
+      return res.json(
+        buildRecommendationsPayload(
+          rows,
+          brand,
+          profile,
+          aeoPerBrand,
+          geoPerBrand,
+          tractPerBrand
+        )
+      );
+    }
+
+    const { data, error } = await supabase
+      .from("scans")
+      .select(
+        "brand, engine, intent, aeo_score, aeo_analysis, geo_score, geo_analysis, created_at"
+      )
+      .eq("company_id", req.user.company_id);
+
+    if (error) {
+      console.error("Recommendations error:", error.message);
+      return res.status(500).json({ error: error.message });
+    }
+
+    const rows = filterIgnoredBrands(data || []);
+    const order = [];
+    const seen = new Set();
+    for (const row of rows) {
+      const b = String(row.brand || "").trim();
+      if (!b) continue;
+      const k = b.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        order.push(b);
+      }
+    }
+
+    const brand = pickPrimaryBrand(order, req.query?.brand || body.brand);
+    if (!brand) {
+      return res.json({
+        brand: null,
+        recommendations: [],
+        message: "Run an audit with Brand 1 filled in, then return here.",
+      });
+    }
+
+    const aeoPerBrand = aggregatePerBrand(rows, buildAeoStatsForGroup);
+    const geoPerBrand = aggregatePerBrand(rows, buildGeoStatsForGroup);
+    const tractPerBrand = {};
+    for (const b of Object.keys(aeoPerBrand)) {
+      tractPerBrand[b] = computeTractScore(
+        aeoPerBrand[b]?.score,
+        geoPerBrand[b]?.score
+      );
+    }
+
+    let profile = { domains: [], facts: "" };
+    try {
+      const profiles = await getProfilesForCompany(req.user.company_id);
+      const hit = profiles?.get?.(brand.toLowerCase());
+      if (hit) {
+        profile = {
+          domains: Array.isArray(hit.domains) ? hit.domains : [],
+          facts: String(hit.facts || ""),
+        };
+      }
+    } catch (_) {
+      /* brand_profiles table optional */
+    }
+
+    res.json(
+      buildRecommendationsPayload(
+        rows,
+        brand,
+        profile,
+        aeoPerBrand,
+        geoPerBrand,
+        tractPerBrand
+      )
+    );
+  } catch (e) {
+    console.error("Recommendations:", e);
+    res.status(500).json({ error: e.message || "Recommendations failed" });
+  }
 });
 
 /** Up to 4 unique brands (case-insensitive dedupe, order preserved). */
