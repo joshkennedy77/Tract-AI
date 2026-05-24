@@ -106,8 +106,35 @@ function filterIgnoredBrands(rows) {
   });
 }
 
+/** Comma-separated production origins, e.g. https://your-app.vercel.app */
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function isAllowedCorsOrigin(origin) {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+    if (hostname.endsWith(".vercel.app")) return true;
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (isAllowedCorsOrigin(origin)) return callback(null, true);
+      callback(null, false);
+    },
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/api/health", (_req, res) => {
@@ -1195,8 +1222,11 @@ app.post(
 );
 
 const PORT = Number(process.env.PORT) || 3001;
-const server = app.listen(PORT, "127.0.0.1", () => {
-  console.log(`Tract API listening at http://127.0.0.1:${PORT}`);
+const HOST =
+  process.env.HOST ||
+  (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
+const server = app.listen(PORT, HOST, () => {
+  console.log(`Tract API listening at http://${HOST}:${PORT}`);
   console.log(
     `Persist scans to Supabase: ${PERSIST_SCANS ? "ON" : "OFF"} (set PERSIST_SCANS=true to save rows)`
   );

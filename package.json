@@ -8,7 +8,8 @@
     "build": "npm run build --prefix frontend",
     "dev": "npm run dev --prefix frontend",
     "preview": "npm run preview --prefix frontend",
-    "api": "node backend/server.js"
+    "api": "node backend/server.js",
+    "start": "node backend/server.js"
   },
   "keywords": [],
   "author": "",
