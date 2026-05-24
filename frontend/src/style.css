@@ -534,6 +534,10 @@ a {
   flex-wrap: wrap;
 }
 
+.metric-label-tail {
+  white-space: nowrap;
+}
+
 .metric-help {
   display: inline-flex;
   align-items: center;
@@ -693,6 +697,13 @@ a {
   padding: 1.1rem 1.15rem 1.15rem;
 }
 
+.chart-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
 .chart-area {
   height: 200px;
   width: 100%;
@@ -706,11 +717,12 @@ a {
 /* Visibility pane: caption + SVG + legend must stack; do not clip legend */
 #chart-visibility.chart-area {
   height: auto;
-  min-height: 200px;
+  min-height: 140px;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   overflow: visible;
+  padding: 0.35rem 0 0.5rem;
 }
 
 #chart-visibility.chart-area > svg:only-child {
@@ -1550,12 +1562,15 @@ a {
   resize: vertical;
 }
 
-/* —— Score cards row (Tract + AEO + GEO) —— */
+/* —— Score cards row (AEO + GEO on top, Tract spans full width below) —— */
 .score-cards-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 2fr 2fr;
+  grid-template-columns: 1fr 1fr;
   gap: 1rem;
   margin: 1rem 0;
+}
+.score-cards-row .tract-score-card {
+  grid-column: 1 / -1;
 }
 @media (max-width: 1100px) {
   .score-cards-row { grid-template-columns: 1fr; }
@@ -1607,13 +1622,31 @@ a {
   --card-accent: #2563eb;
   --card-accent-soft: rgba(37, 99, 235, 0.12);
   border-left: 4px solid var(--card-accent);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.5rem;
 }
-.tract-score-card h3 { font-size: 18px; font-weight: 700; }
-.tract-score-body {
+.tract-score-head {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  margin-top: 0.5rem;
+  min-width: 0;
+}
+.tract-score-head h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+.tract-score-head .score-explain {
+  margin: 0;
+}
+.tract-score-body {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 .tract-score-number {
   font-size: 3rem;
@@ -1622,7 +1655,22 @@ a {
   line-height: 1;
   color: var(--card-accent);
 }
-.tract-score-meta { font-size: 0.92rem; color: var(--slate-700); }
+.tract-score-meta {
+  font-size: 0.92rem;
+  color: var(--slate-700);
+  text-align: right;
+}
+@media (max-width: 720px) {
+  .tract-score-card {
+    grid-template-columns: 1fr;
+  }
+  .tract-score-body {
+    justify-content: flex-start;
+  }
+  .tract-score-meta {
+    text-align: left;
+  }
+}
 
 .aeo-card {
   --card-accent: #059669;

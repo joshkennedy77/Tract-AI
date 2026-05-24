@@ -493,7 +493,7 @@ export function mount(root) {
               Audits you have run appear here as studies. Click a card to open <strong>Test Results</strong> for that run. Login will land here later.
             </p>
             <div class="home-actions">
-              <a href="#view-brands" class="btn-primary js-nav" data-view="brands">Run new audit</a>
+              <a href="#view-brands" id="btn-home-new-audit" class="btn-primary js-nav" data-view="brands">Run new audit</a>
             </div>
             <div id="home-study-grid" class="study-card-grid" role="list"></div>
           </section>
@@ -596,13 +596,12 @@ export function mount(root) {
                 <div class="metric-sources-inner">
                   <div class="metric-sources-col">
                     <div class="metric-block-label metric-label-with-help">
-                      Total sources cited
-                      <span
+                      Total sources <span class="metric-label-tail">cited <span
                         class="metric-help"
                         title="Sum of URLs or citations returned with each model answer (Perplexity search results, Gemini grounding links, OpenAI URL annotations when present)."
                         aria-label="Help: total sources cited"
                         role="img"
-                        >?</span>
+                      >?</span></span>
                     </div>
                     <div class="metric-sources-value-row">
                       <span class="metric-block-value metric-sources-main" id="ov-src-total">—</span>
@@ -613,13 +612,12 @@ export function mount(root) {
                   <div class="metric-sources-divider" aria-hidden="true"></div>
                   <div class="metric-sources-col">
                     <div class="metric-block-label metric-label-with-help">
-                      Sources when brand mentioned
-                      <span
+                      Sources when brand <span class="metric-label-tail">mentioned <span
                         class="metric-help"
                         title="Same count, but only for answers where the audited brand was detected in the model reply."
                         aria-label="Help: sources when brand mentioned"
                         role="img"
-                        >?</span>
+                      >?</span></span>
                     </div>
                     <div class="metric-sources-value-row">
                       <span class="metric-block-value metric-sources-main" id="ov-src-mention">—</span>
@@ -637,18 +635,6 @@ export function mount(root) {
             </div>
 
             <div class="score-cards-row">
-              <div class="panel-card tract-score-card" id="tract-score-card">
-                <h3>Tract score <span class="help-dot" tabindex="0" role="img" aria-label="What the Tract score means" title="Tract score: 0–100. A weighted blend of your AEO score (55%) and GEO score (45%). One number that summarises how well your brand performs in AI answers overall.">?</span></h3>
-                <p class="score-explain">
-                  One number that combines AEO and GEO so you can track how
-                  your brand is doing in AI answers overall.
-                  <span class="muted">(AEO 55% · GEO 45%)</span>
-                </p>
-                <div class="tract-score-body">
-                  <div class="tract-score-number" id="tract-score-number">—</div>
-                  <div class="tract-score-meta" id="tract-score-meta">No data yet.</div>
-                </div>
-              </div>
               <div class="panel-card aeo-card" id="aeo-card">
                 <h3 id="aeo-card-title">AEO score</h3>
                 <p class="score-explain">
@@ -674,6 +660,20 @@ export function mount(root) {
                   <p class="muted">No citation data yet.</p>
                 </div>
               </div>
+              <div class="panel-card tract-score-card" id="tract-score-card">
+                <div class="tract-score-head">
+                  <h3>Tract score <span class="help-dot" tabindex="0" role="img" aria-label="What the Tract score means" title="Tract score: 0–100. A weighted blend of your AEO score (55%) and GEO score (45%). One number that summarises how well your brand performs in AI answers overall.">?</span></h3>
+                  <p class="score-explain">
+                    One number that combines AEO and GEO so you can track how
+                    your brand is doing in AI answers overall.
+                    <span class="muted">(AEO 55% · GEO 45%)</span>
+                  </p>
+                </div>
+                <div class="tract-score-body">
+                  <div class="tract-score-number" id="tract-score-number">—</div>
+                  <div class="tract-score-meta" id="tract-score-meta">No data yet.</div>
+                </div>
+              </div>
             </div>
 
             <div class="ai-strip">
@@ -682,17 +682,13 @@ export function mount(root) {
             </div>
 
             <div class="bottom-grid">
-              <div class="panel-card chart-panel-card">
-                <h3>Visibility &amp; sentiment <span class="help-dot" tabindex="0" role="img" aria-label="What 'Visibility & sentiment' shows" title="Visibility tab: % of AI answers that mentioned each brand. Sentiment tab: split of positive / neutral / negative tone in those answers, per brand.">?</span></h3>
-                <div class="chart-tabs" id="chart-tabs" role="tablist">
-                  <button type="button" class="chart-tab is-on" data-chart="visibility" role="tab" aria-selected="true">Visibility</button>
-                  <button type="button" class="chart-tab" data-chart="sentiment" role="tab" aria-selected="false">Sentiment</button>
-                  <button type="button" class="chart-tab" disabled data-chart="position" role="tab">Position</button>
-                </div>
-                <div id="chart-pane-visibility" class="chart-pane" data-chart-pane="visibility">
+              <div class="chart-stack">
+                <div class="panel-card chart-panel-card">
+                  <h3>Visibility <span class="help-dot" tabindex="0" role="img" aria-label="What 'Visibility' shows" title="Visibility: % of AI answers that mentioned each brand. Higher means the brand shows up more often in AI responses.">?</span></h3>
                   <div class="chart-area" id="chart-visibility"></div>
                 </div>
-                <div id="chart-pane-sentiment" class="chart-pane is-hidden" data-chart-pane="sentiment">
+                <div class="panel-card chart-panel-card">
+                  <h3>Sentiment <span class="help-dot" tabindex="0" role="img" aria-label="What 'Sentiment' shows" title="Sentiment: split of positive / neutral / negative tone in the AI answers that mentioned each brand.">?</span></h3>
                   <div class="chart-area chart-area-sentiment" id="chart-sentiment"></div>
                 </div>
               </div>
@@ -739,9 +735,26 @@ export function mount(root) {
           </section>
 
           <section id="view-sources" class="view is-hidden" data-view-panel="sources">
-            <h2 class="subview-title">Sources</h2>
-            <p class="subview-lead">Connect docs and URLs your models should consider — coming soon.</p>
-            <div class="placeholder-card">No sources configured yet.</div>
+            <h2 class="subview-title">Recent activity</h2>
+            <p class="subview-lead">The most recent scans your team has run. Latest audit details are summarised below; full data appears under <strong>Test Results</strong>.</p>
+            <p class="field-hint muted" id="recent-activity-hint" style="margin-top:0;margin-bottom:0.5rem"></p>
+            <div class="table-wrap">
+              <table class="data-table" id="scans-table">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Brand</th>
+                    <th>Engine</th>
+                    <th>Mention</th>
+                    <th>Sentiment</th>
+                    <th>Prompt</th>
+                    <th>Response</th>
+                    <th>Sources</th>
+                  </tr>
+                </thead>
+                <tbody id="scans-body"></tbody>
+              </table>
+            </div>
           </section>
 
           <section id="view-brands" class="view is-hidden" data-view-panel="brands">
@@ -751,7 +764,7 @@ export function mount(root) {
               <div class="field">
                 <label for="brand">Brand 1</label>
                 <input id="brand" type="text" placeholder="e.g. Nike" autocomplete="off" />
-                <p class="field-hint muted">At least one brand required, up to four for a comparison run. <span class="test-brand-row"><button type="button" class="linkish" id="btn-nike">Nike</button></span></p>
+                <p class="field-hint muted">At least one brand required, up to four for a comparison run.</p>
               </div>
               <div class="field">
                 <label for="brand-2">Brand 2 <span class="muted">(optional)</span></label>
@@ -827,25 +840,6 @@ export function mount(root) {
               </fieldset>
               <button type="button" class="btn-primary" id="btn-scan">Run scan</button>
               <p id="scan-status" class="status-line muted"></p>
-            </div>
-            <h3 class="subview-title" style="font-size:1rem;margin-top:1.5rem">Recent activity</h3>
-            <p class="field-hint muted" id="recent-activity-hint" style="margin-top:0;margin-bottom:0.5rem"></p>
-            <div class="table-wrap">
-              <table class="data-table" id="scans-table">
-                <thead>
-                  <tr>
-                    <th>When</th>
-                    <th>Brand</th>
-                    <th>Engine</th>
-                    <th>Mention</th>
-                    <th>Sentiment</th>
-                    <th>Prompt</th>
-                    <th>Response</th>
-                    <th>Sources</th>
-                  </tr>
-                </thead>
-                <tbody id="scans-body"></tbody>
-              </table>
             </div>
           </section>
 
@@ -934,8 +928,6 @@ export function mount(root) {
               </div>
             </div>
           </section>
-
-          <p class="footer-mini">Tract AI · run <code>npm run api</code> for live data</p>
         </div>
       </div>
     </div>
@@ -2149,6 +2141,86 @@ export function mount(root) {
     }
   }
 
+  /** Wipes the in-tab audit + all Test Results visuals back to their
+   *  pre-scan placeholders. Called when the user clicks "Run new audit"
+   *  so the next scan replaces (rather than overlays) the previous one. */
+  function resetTestResults() {
+    latestAuditMemory = null;
+    try {
+      sessionStorage.removeItem(AUDIT_STORAGE_KEY);
+    } catch (_) {
+      /* ignore */
+    }
+
+    currentStats = null;
+    currentScoreBrand = "__all__";
+
+    if (el.auditSessionNote) el.auditSessionNote.classList.add("is-hidden");
+
+    if (el.ovVisPct) el.ovVisPct.textContent = "—";
+    if (el.ovVisTrend) {
+      el.ovVisTrend.textContent = "";
+      el.ovVisTrend.className = "metric-trend";
+    }
+    if (el.ovVisRing) el.ovVisRing.style.setProperty("--ring-pct", "0");
+    if (el.ovAnswers) el.ovAnswers.textContent = "—";
+    if (el.ovAnswersTrend) el.ovAnswersTrend.textContent = "no scan yet";
+    if (el.ovCiteTotal) el.ovCiteTotal.textContent = "—";
+    if (el.ovCiteTrend) el.ovCiteTrend.textContent = "";
+    if (el.ovCiteBrand) el.ovCiteBrand.textContent = "—";
+    if (el.ovCiteBrandTrend) el.ovCiteBrandTrend.textContent = "";
+    if (el.ovShare) el.ovShare.textContent = "—";
+    if (el.ovShareNote) el.ovShareNote.textContent = "";
+
+    if (el.ovSrcTotal) el.ovSrcTotal.textContent = "—";
+    if (el.ovSrcMention) el.ovSrcMention.textContent = "—";
+    if (el.ovSrcTotalPill) {
+      el.ovSrcTotalPill.textContent = "—";
+      el.ovSrcTotalPill.className = "metric-src-pill is-muted";
+    }
+    if (el.ovSrcTotalSub) el.ovSrcTotalSub.textContent = "run a scan";
+    if (el.ovSrcMentionPill) {
+      el.ovSrcMentionPill.textContent = "—";
+      el.ovSrcMentionPill.className = "metric-src-pill is-muted";
+    }
+    if (el.ovSrcMentionSub) el.ovSrcMentionSub.textContent = "—";
+
+    if (el.ovPosition) el.ovPosition.textContent = "—";
+    if (el.ovPositionNote) el.ovPositionNote.textContent = "run a scan";
+
+    if (el.ovKpiRow) el.ovKpiRow.innerHTML = "";
+    if (el.badgeBrands) el.badgeBrands.textContent = "0";
+
+    if (el.tractScoreNumber) el.tractScoreNumber.textContent = "—";
+    if (el.tractScoreMeta) el.tractScoreMeta.textContent = "No data yet.";
+    if (el.aeoCardTitle) el.aeoCardTitle.textContent = "AEO score";
+    if (el.aeoCardBody)
+      el.aeoCardBody.innerHTML = `<p class="muted">No AEO judgements yet — run a scan.</p>`;
+    if (el.geoCardTitle) el.geoCardTitle.textContent = "GEO score";
+    if (el.geoCardBody)
+      el.geoCardBody.innerHTML = `<p class="muted">No citation data yet.</p>`;
+    if (el.scoreBrandFilter) el.scoreBrandFilter.classList.add("is-hidden");
+    if (el.scoreBrandSelect) el.scoreBrandSelect.innerHTML = "";
+
+    if (el.scansBody)
+      el.scansBody.innerHTML = `<tr><td colspan="8" class="muted center">No rows yet.</td></tr>`;
+    if (el.recentActivityHint) el.recentActivityHint.textContent = "";
+
+    const compareWrap = root.querySelector("#brand-compare-wrap");
+    const compareBody = root.querySelector("#brand-compare-body");
+    if (compareBody)
+      compareBody.innerHTML = `<tr><td colspan="5" class="center muted">No scans yet — run one from Run Audit.</td></tr>`;
+    if (compareWrap) compareWrap.classList.add("is-hidden");
+
+    if (el.chartVisibility) el.chartVisibility.innerHTML = "";
+    const chartSent = root.querySelector("#chart-sentiment");
+    if (chartSent) chartSent.innerHTML = "";
+
+    const lbBody = root.querySelector("#lb-body");
+    if (lbBody)
+      lbBody.innerHTML = `<tr><td colspan="4" class="center muted">No data yet.</td></tr>`;
+  }
+
   function applyStatsPayload(s, source) {
     const total = s.totalScans || 0;
     const mention = s.mentionRatePercent ?? 0;
@@ -2492,30 +2564,8 @@ export function mount(root) {
     promptTimer = setTimeout(refreshPrompts, 280);
   });
 
-  root.querySelector("#btn-nike").addEventListener("click", () => {
-    el.brand.value = "Nike";
-    refreshPrompts();
-  });
-
   root.querySelector("#btn-refresh-lb").addEventListener("click", () => {
     refreshAll();
-  });
-
-  root.querySelector("#chart-tabs")?.addEventListener("click", (ev) => {
-    const btn = ev.target.closest(".chart-tab[data-chart]");
-    if (!btn || btn.disabled) return;
-    const tab = btn.getAttribute("data-chart");
-    root.querySelectorAll("#chart-tabs .chart-tab").forEach((b) => {
-      const on = b.getAttribute("data-chart") === tab;
-      b.classList.toggle("is-on", on);
-      b.setAttribute("aria-selected", on ? "true" : "false");
-    });
-    root.querySelectorAll(".chart-panel-card .chart-pane").forEach((p) => {
-      p.classList.toggle(
-        "is-hidden",
-        p.getAttribute("data-chart-pane") !== tab
-      );
-    });
   });
 
   function getBrandsFromRunAuditForm() {
@@ -2606,6 +2656,12 @@ export function mount(root) {
       runScanFromUi();
     }
   });
+
+  root
+    .querySelector("#btn-home-new-audit")
+    ?.addEventListener("click", () => {
+      resetTestResults();
+    });
 
   el.scoreBrandSelect?.addEventListener("change", (ev) => {
     currentScoreBrand = String(ev.target.value || "__all__");
