@@ -1,6 +1,6 @@
-# Deploying Tract AI (Vercel + Railway)
+# Deploying Trak AI (Vercel + Railway)
 
-Tract is split into two deployable parts:
+Trak is split into two deployable parts:
 
 | Piece | Host | Why |
 | --- | --- | --- |

@@ -9,7 +9,7 @@ const supabase = require("../supabaseClient.js");
  *   }
  *
  * For PR-1 we pick the first company_members row for the user; a "user in
- * multiple companies" UX comes later. Tract staff who haven't been added to
+ * multiple companies" UX comes later. Trak staff who haven't been added to
  * a company will have company_id=null; gate company-scoped routes with
  * requireCompany so they get a clear 403 instead of an empty dashboard.
  */
@@ -60,7 +60,7 @@ function requireCompany(req, res, next) {
   if (!req.user?.company_id) {
     return res.status(403).json({
       error:
-        "No company yet. Ask a Tract admin or your company admin for an invite.",
+        "No company yet. Ask a Trak admin or your company admin for an invite.",
     });
   }
   next();
@@ -68,7 +68,7 @@ function requireCompany(req, res, next) {
 
 function requireTractStaff(req, res, next) {
   if (!req.user?.tract_role) {
-    return res.status(403).json({ error: "Tract staff only." });
+    return res.status(403).json({ error: "Trak staff only." });
   }
   next();
 }

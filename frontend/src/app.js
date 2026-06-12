@@ -356,7 +356,7 @@ const ICON = {
   recommendations: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>`,
   home: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
   team: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
-  tract: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M15 9h.01M9 13h.01M15 13h.01M9 17h.01M15 17h.01"/></svg>`,
+  trak: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M15 9h.01M9 13h.01M15 13h.01M9 17h.01M15 17h.01"/></svg>`,
 };
 
 export function mount(root) {
@@ -364,13 +364,13 @@ export function mount(root) {
     <div class="app">
       <div id="auth-gate" class="auth-gate" aria-live="polite">
         <div class="auth-card" role="dialog" aria-labelledby="auth-title">
-          <div class="auth-logo"><span class="topbar-logo-mark">T</span> Tract</div>
+          <div class="auth-logo"><span class="topbar-logo-mark">T</span> Trak</div>
 
           <div id="auth-loading" class="auth-loading">Checking session…</div>
 
           <div id="auth-signin-mode" class="is-hidden">
             <h1 id="auth-title" class="auth-title">Sign in</h1>
-            <p class="auth-sub">Use the email a Tract admin invited you with.</p>
+            <p class="auth-sub">Use the email a Trak admin invited you with.</p>
             <form id="auth-signin-form" class="auth-form">
               <label class="auth-field">
                 <span>Email</span>
@@ -423,7 +423,7 @@ export function mount(root) {
           <div id="auth-nocompany-mode" class="is-hidden">
             <h1 class="auth-title">No company yet</h1>
             <p>You're signed in as <strong id="auth-nocompany-email">—</strong>, but you don't belong to a company yet.</p>
-            <p class="muted">Ask a Tract admin or your company admin to add you, then refresh.</p>
+            <p class="muted">Ask a Trak admin or your company admin to add you, then refresh.</p>
             <button type="button" class="btn-ghost" id="btn-signout-empty">Sign out</button>
           </div>
 
@@ -432,9 +432,9 @@ export function mount(root) {
       </div>
 
       <header class="topbar">
-        <a href="#view-home" class="topbar-logo js-nav" data-view="home" aria-label="Tract — Home">
+        <a href="#view-home" class="topbar-logo js-nav" data-view="home" aria-label="Trak — Home">
           <span class="topbar-logo-mark">T</span>
-          Tract
+          Trak
         </a>
         <div class="topbar-account" id="topbar-account" title="Signed-in account">
           <span class="topbar-account-label">Company</span>
@@ -475,10 +475,10 @@ export function mount(root) {
               <a href="#view-team" class="js-nav" data-view="team">${ICON.team} Team</a>
             </li>
           </ul>
-          <div id="side-tract-label" class="side-section-label is-hidden">Tract</div>
+          <div id="side-trak-label" class="side-section-label is-hidden">Trak</div>
           <ul class="side-nav">
-            <li id="nav-tract-admin-li" class="is-hidden">
-              <a href="#view-tract-admin" class="js-nav" data-view="tract-admin">${ICON.tract} Companies</a>
+            <li id="nav-trak-admin-li" class="is-hidden">
+              <a href="#view-trak-admin" class="js-nav" data-view="trak-admin">${ICON.trak} Companies</a>
             </li>
           </ul>
         </aside>
@@ -632,7 +632,7 @@ export function mount(root) {
             </div>
 
             <div class="score-brand-filter" id="score-brand-filter">
-              <label for="score-brand-select"><strong>Show AEO &amp; GEO for:</strong> <span class="help-dot" tabindex="0" role="img" aria-label="What this selector does" title="Filters the AEO, GEO, and Tract score cards below to a single brand. 'All brands (pooled)' averages across every brand in this audit.">?</span></label>
+              <label for="score-brand-select"><strong>Show AEO &amp; GEO for:</strong> <span class="help-dot" tabindex="0" role="img" aria-label="What this selector does" title="Filters the AEO, GEO, and Trak score cards below to a single brand. 'All brands (pooled)' averages across every brand in this audit.">?</span></label>
               <select id="score-brand-select"></select>
             </div>
 
@@ -662,18 +662,18 @@ export function mount(root) {
                   <p class="muted">No citation data yet.</p>
                 </div>
               </div>
-              <div class="panel-card tract-score-card" id="tract-score-card">
-                <div class="tract-score-head">
-                  <h3>Tract score <span class="help-dot" tabindex="0" role="img" aria-label="What the Tract score means" title="Tract score: 0–100. A weighted blend of your AEO score (55%) and GEO score (45%). One number that summarises how well your brand performs in AI answers overall.">?</span></h3>
+              <div class="panel-card trak-score-card" id="trak-score-card">
+                <div class="trak-score-head">
+                  <h3>Trak score <span class="help-dot" tabindex="0" role="img" aria-label="What the Trak score means" title="Trak score: 0–100. A weighted blend of your AEO score (55%) and GEO score (45%). One number that summarises how well your brand performs in AI answers overall.">?</span></h3>
                   <p class="score-explain">
                     One number that combines AEO and GEO so you can track how
                     your brand is doing in AI answers overall.
                     <span class="muted">(AEO 55% · GEO 45%)</span>
                   </p>
                 </div>
-                <div class="tract-score-body">
-                  <div class="tract-score-number" id="tract-score-number">—</div>
-                  <div class="tract-score-meta" id="tract-score-meta">No data yet.</div>
+                <div class="trak-score-body">
+                  <div class="trak-score-number" id="trak-score-number">—</div>
+                  <div class="trak-score-meta" id="trak-score-meta">No data yet.</div>
                 </div>
               </div>
             </div>
@@ -854,7 +854,7 @@ export function mount(root) {
             </p>
             <div class="recs-summary panel-card" id="recs-summary">
               <div class="recs-summary-scores">
-                <span class="recs-pill recs-pill-tract">Tract <strong id="recs-tract-score">—</strong></span>
+                <span class="recs-pill recs-pill-trak">Trak <strong id="recs-trak-score">—</strong></span>
                 <span class="recs-pill recs-pill-aeo">AEO <strong id="recs-aeo-score">—</strong></span>
                 <span class="recs-pill recs-pill-geo">GEO <strong id="recs-geo-score">—</strong></span>
               </div>
@@ -870,26 +870,26 @@ export function mount(root) {
             <div class="placeholder-card">No tags yet.</div>
           </section>
 
-          <section id="view-tract-admin" class="view is-hidden" data-view-panel="tract-admin">
+          <section id="view-trak-admin" class="view is-hidden" data-view-panel="trak-admin">
             <div class="page-title-row">
               <h1 class="page-title">Companies</h1>
             </div>
-            <p class="subview-lead">Tract-internal view. Provision new enterprise customers and manage existing ones.</p>
+            <p class="subview-lead">Trak internal view. Provision new enterprise customers and manage existing ones.</p>
 
             <div class="panel-card team-invite-card">
               <h3 style="margin-top:0">Create a new company</h3>
-              <form id="tract-create-form" class="tract-create-form">
-                <input type="text" id="tract-create-name" placeholder="Company name" autocomplete="off" required />
-                <input type="email" id="tract-create-email" placeholder="First admin email" autocomplete="off" required />
-                <button type="submit" class="btn-primary" id="tract-create-btn">Create</button>
+              <form id="trak-create-form" class="trak-create-form">
+                <input type="text" id="trak-create-name" placeholder="Company name" autocomplete="off" required />
+                <input type="email" id="trak-create-email" placeholder="First admin email" autocomplete="off" required />
+                <button type="submit" class="btn-primary" id="trak-create-btn">Create</button>
               </form>
-              <p id="tract-create-status" class="field-hint muted"></p>
+              <p id="trak-create-status" class="field-hint muted"></p>
             </div>
 
             <div class="panel-card">
               <h3 style="margin-top:0">All companies</h3>
               <div class="table-wrap">
-                <table class="data-table tract-companies-table">
+                <table class="data-table trak-companies-table">
                   <thead>
                     <tr>
                       <th>Name</th>
@@ -901,7 +901,7 @@ export function mount(root) {
                       <th style="text-align:right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody id="tract-companies-body">
+                  <tbody id="trak-companies-body">
                     <tr><td colspan="7" class="muted">Loading…</td></tr>
                   </tbody>
                 </table>
@@ -988,14 +988,14 @@ export function mount(root) {
     recentActivityHint: root.querySelector("#recent-activity-hint"),
     recsList: root.querySelector("#recs-list"),
     recsBrandLabel: root.querySelector("#recs-brand-label"),
-    recsTractScore: root.querySelector("#recs-tract-score"),
+    recsTrakScore: root.querySelector("#recs-trak-score"),
     recsAeoScore: root.querySelector("#recs-aeo-score"),
     recsGeoScore: root.querySelector("#recs-geo-score"),
     badgeRecs: root.querySelector("#badge-recs"),
     scoreBrandFilter: root.querySelector("#score-brand-filter"),
     scoreBrandSelect: root.querySelector("#score-brand-select"),
-    tractScoreNumber: root.querySelector("#tract-score-number"),
-    tractScoreMeta: root.querySelector("#tract-score-meta"),
+    trakScoreNumber: root.querySelector("#trak-score-number"),
+    trakScoreMeta: root.querySelector("#trak-score-meta"),
     aeoCardTitle: root.querySelector("#aeo-card-title"),
     aeoCardBody: root.querySelector("#aeo-card-body"),
     geoCardTitle: root.querySelector("#geo-card-title"),
@@ -1012,7 +1012,7 @@ export function mount(root) {
   /** Holds the latest or focused scan in this tab (see readLatestAudit). */
   let latestAuditMemory = null;
 
-  const views = ["home", "overview", "recommendations", "prompts", "sources", "brands", "tags", "team", "tract-admin"];
+  const views = ["home", "overview", "recommendations", "prompts", "sources", "brands", "tags", "team", "trak-admin"];
 
   function showView(name) {
     views.forEach((v) => {
@@ -1033,8 +1033,8 @@ export function mount(root) {
       loadRecommendations();
     } else if (name === "team") {
       loadTeamMembers();
-    } else if (name === "tract-admin") {
-      loadTractCompanies();
+    } else if (name === "trak-admin") {
+      loadTrakCompanies();
     }
   }
 
@@ -1084,8 +1084,8 @@ export function mount(root) {
     </tr>`;
   }
 
-  const AUDIT_STORAGE_KEY = "tract:last-audit";
-  const AUDIT_LIBRARY_KEY = "tract:audit-library";
+  const AUDIT_STORAGE_KEY = "trak:last-audit";
+  const AUDIT_LIBRARY_KEY = "trak:audit-library";
   const MAX_LIBRARY_STUDIES = 12;
 
   function readAuditLibrary() {
@@ -1524,7 +1524,7 @@ export function mount(root) {
     };
   }
 
-  function computeTractScore(aeoScore, geoScore) {
+  function computeTrakScore(aeoScore, geoScore) {
     const aeoOk = Number.isFinite(Number(aeoScore));
     const geoOk = Number.isFinite(Number(geoScore));
     if (!aeoOk && !geoOk) return null;
@@ -1686,10 +1686,10 @@ export function mount(root) {
     const aeoPerBrand = aggregatePerBrand(scoreRows, buildAeoStatsForGroup);
     const geoOverall = buildGeoStatsForGroup(scoreRows);
     const geoPerBrand = aggregatePerBrand(scoreRows, buildGeoStatsForGroup);
-    const tractOverall = computeTractScore(aeoOverall.score, geoOverall.score);
-    const tractPerBrand = {};
+    const trakOverall = computeTrakScore(aeoOverall.score, geoOverall.score);
+    const trakPerBrand = {};
     for (const brand of Object.keys(aeoPerBrand)) {
-      tractPerBrand[brand] = computeTractScore(
+      trakPerBrand[brand] = computeTrakScore(
         aeoPerBrand[brand]?.score,
         geoPerBrand[brand]?.score
       );
@@ -1718,7 +1718,7 @@ export function mount(root) {
       engineMentionRates,
       aeo: { overall: aeoOverall, byBrand: aeoPerBrand },
       geo: { overall: geoOverall, byBrand: geoPerBrand },
-      tractScore: { overall: tractOverall, byBrand: tractPerBrand },
+      trakScore: { overall: trakOverall, byBrand: trakPerBrand },
     };
   }
 
@@ -1755,7 +1755,7 @@ export function mount(root) {
   }
 
   // -----------------------------------------------------------------------
-  // Score card renderers (Tract / AEO / GEO)
+  // Score card renderers (Trak / AEO / GEO)
   // -----------------------------------------------------------------------
 
   function intentLabel(it) {
@@ -2025,12 +2025,12 @@ export function mount(root) {
     `;
   }
 
-  function renderTractScoreCard(score, brandLabel, aeoStats, geoStats) {
-    el.tractScoreNumber.textContent = score == null ? "—" : String(score);
+  function renderTrakScoreCard(score, brandLabel, aeoStats, geoStats) {
+    el.trakScoreNumber.textContent = score == null ? "—" : String(score);
     const parts = [];
     if (aeoStats?.score != null) parts.push(`AEO ${aeoStats.score}`);
     if (geoStats?.score != null) parts.push(`GEO ${geoStats.score}`);
-    el.tractScoreMeta.innerHTML = parts.length
+    el.trakScoreMeta.innerHTML = parts.length
       ? `<span>${brandLabel}</span> · <span class="muted">${parts.join(" · ")}</span>`
       : `<span class="muted">No scored answers yet — run a scan.</span>`;
   }
@@ -2075,14 +2075,14 @@ export function mount(root) {
       return {
         aeo: stats.aeo?.overall || null,
         geo: stats.geo?.overall || null,
-        score: stats.tractScore?.overall ?? null,
+        score: stats.trakScore?.overall ?? null,
         brandLabel: "All brands",
       };
     }
     return {
       aeo: stats.aeo?.byBrand?.[brand] || null,
       geo: stats.geo?.byBrand?.[brand] || null,
-      score: stats.tractScore?.byBrand?.[brand] ?? null,
+      score: stats.trakScore?.byBrand?.[brand] ?? null,
       brandLabel: brand,
     };
   }
@@ -2090,7 +2090,7 @@ export function mount(root) {
   function renderScoreCardsForCurrentBrand() {
     if (!currentStats) return;
     const slice = sliceScoreStatsForBrand(currentStats, currentScoreBrand);
-    renderTractScoreCard(slice.score, slice.brandLabel, slice.aeo, slice.geo);
+    renderTrakScoreCard(slice.score, slice.brandLabel, slice.aeo, slice.geo);
     renderAeoCard(slice.aeo, slice.brandLabel);
     renderGeoCard(slice.geo, slice.brandLabel);
   }
@@ -2223,8 +2223,8 @@ export function mount(root) {
     if (el.recsList)
       el.recsList.innerHTML = `<p class="muted">Run an audit to see recommendations for Brand 1.</p>`;
 
-    if (el.tractScoreNumber) el.tractScoreNumber.textContent = "—";
-    if (el.tractScoreMeta) el.tractScoreMeta.textContent = "No data yet.";
+    if (el.trakScoreNumber) el.trakScoreNumber.textContent = "—";
+    if (el.trakScoreMeta) el.trakScoreMeta.textContent = "No data yet.";
     if (el.aeoCardTitle) el.aeoCardTitle.textContent = "AEO score";
     if (el.aeoCardBody)
       el.aeoCardBody.innerHTML = `<p class="muted">No AEO judgements yet — run a scan.</p>`;
@@ -2336,15 +2336,15 @@ export function mount(root) {
       s.geo?.overall?.score != null
         ? `<span class="kpi-chip"><span class="dot ok"></span> GEO: ${s.geo.overall.score}/100</span>`
         : "";
-    const tractChip =
-      s.tractScore?.overall != null
-        ? `<span class="kpi-chip"><span class="dot ok"></span> Tract: ${s.tractScore.overall}/100</span>`
+    const trakChip =
+      s.trakScore?.overall != null
+        ? `<span class="kpi-chip"><span class="dot ok"></span> Trak: ${s.trakScore.overall}/100</span>`
         : "";
     el.ovKpiRow.innerHTML = `
       <span class="kpi-chip"><span class="dot ok"></span> Visibility: ${visScore}/6</span>
       <span class="kpi-chip"><span class="dot ${sentScore >= 3 ? "ok" : "warn"}"></span> Sentiment: ${sumS ? `${positive}/${sumS}` : "—"}</span>
       <span class="kpi-chip"><span class="dot ok"></span> Position: ${posScore}/6</span>
-      ${tractChip}${aeoChip}${geoChip}
+      ${trakChip}${aeoChip}${geoChip}
     `;
 
     const bc = s.brandComparison || [];
@@ -2412,7 +2412,7 @@ export function mount(root) {
 
     el.badgeBrands.textContent = String(brandsN);
 
-    // Score cards (Tract / AEO / GEO) — driven by the brand selector.
+    // Score cards (Trak / AEO / GEO) — driven by the brand selector.
     currentStats = s;
     populateScoreBrandSelector(s);
     renderScoreCardsForCurrentBrand();
@@ -2492,7 +2492,7 @@ export function mount(root) {
 
   function renderRecommendationCard(rec) {
     const areaLabel =
-      rec.area === "aeo" ? "AEO" : rec.area === "geo" ? "GEO" : "Overview";
+      rec.area === "aeo" ? "AEO" : rec.area === "geo" ? "GEO" : "Trak";
     const actions = (rec.actions || [])
       .map((a) => `<li>${escapeHtml(a)}</li>`)
       .join("");
@@ -2535,12 +2535,12 @@ export function mount(root) {
       const brand = out?.brand || payload.brand || "Brand 1";
       if (el.recsBrandLabel) el.recsBrandLabel.textContent = brand;
 
-      const tract = out?.tractScore;
+      const trak = out?.trakScore;
       const aeo = out?.aeo?.score;
       const geo = out?.geo?.score;
-      if (el.recsTractScore)
-        el.recsTractScore.textContent =
-          tract == null ? "—" : `${tract}/100`;
+      if (el.recsTrakScore)
+        el.recsTrakScore.textContent =
+          trak == null ? "—" : `${trak}/100`;
       if (el.recsAeoScore)
         el.recsAeoScore.textContent = aeo == null ? "—" : `${aeo}/100`;
       if (el.recsGeoScore)
@@ -2822,21 +2822,21 @@ export function mount(root) {
     if (emailEl) emailEl.textContent = user?.email || "";
     if (companyEl) {
       companyEl.textContent = user?.tract_role
-        ? `Tract · ${user.tract_role}`
+        ? `Trak · ${user.tract_role}`
         : user?.company_id
           ? "Your company"
           : "—";
     }
     revealAdminNav(user?.company_role === "admin");
-    revealTractNav(!!user?.tract_role);
+    revealTrakNav(!!user?.tract_role);
   }
 
-  function revealTractNav(isStaff) {
+  function revealTrakNav(isStaff) {
     root
-      .querySelector("#side-tract-label")
+      .querySelector("#side-trak-label")
       .classList.toggle("is-hidden", !isStaff);
     root
-      .querySelector("#nav-tract-admin-li")
+      .querySelector("#nav-trak-admin-li")
       .classList.toggle("is-hidden", !isStaff);
   }
 
@@ -2946,8 +2946,8 @@ export function mount(root) {
     .querySelector("#team-members-body")
     .addEventListener("click", handleTeamClick);
 
-  // ------- Tract-admin view (PR-3) -------
-  function renderTractCompanyRow(c) {
+  // ------- Trak-admin view (PR-3) -------
+  function renderTrakCompanyRow(c) {
     const isDeactivated = !!c.deactivated_at;
     const statusPill = isDeactivated
       ? '<span class="role-pill role-employee">Deactivated</span>'
@@ -2963,14 +2963,14 @@ export function mount(root) {
       <td>${last}</td>
       <td>${statusPill}</td>
       <td style="text-align:right">
-        <button type="button" class="btn-ghost btn-sm js-tract-add-admin">Add admin</button>
-        <button type="button" class="btn-ghost btn-sm js-tract-toggle" data-action="${toggleAction}">${toggleLabel}</button>
+        <button type="button" class="btn-ghost btn-sm js-trak-add-admin">Add admin</button>
+        <button type="button" class="btn-ghost btn-sm js-trak-toggle" data-action="${toggleAction}">${toggleLabel}</button>
       </td>
     </tr>`;
   }
 
-  async function loadTractCompanies() {
-    const body = root.querySelector("#tract-companies-body");
+  async function loadTrakCompanies() {
+    const body = root.querySelector("#trak-companies-body");
     if (!body) return;
     body.innerHTML = `<tr><td colspan="7" class="muted">Loading…</td></tr>`;
     try {
@@ -2980,7 +2980,7 @@ export function mount(root) {
         body.innerHTML = `<tr><td colspan="7" class="muted">No companies yet.</td></tr>`;
         return;
       }
-      body.innerHTML = companies.map(renderTractCompanyRow).join("");
+      body.innerHTML = companies.map(renderTrakCompanyRow).join("");
     } catch (e) {
       body.innerHTML = `<tr><td colspan="7" class="muted">Failed to load: ${escapeHtml(e.message)}</td></tr>`;
     }
@@ -2988,10 +2988,10 @@ export function mount(root) {
 
   async function doCreateCompany(ev) {
     ev.preventDefault();
-    const nameEl = root.querySelector("#tract-create-name");
-    const emailEl = root.querySelector("#tract-create-email");
-    const status = root.querySelector("#tract-create-status");
-    const btn = root.querySelector("#tract-create-btn");
+    const nameEl = root.querySelector("#trak-create-name");
+    const emailEl = root.querySelector("#trak-create-email");
+    const status = root.querySelector("#trak-create-status");
+    const btn = root.querySelector("#trak-create-btn");
     const name = (nameEl.value || "").trim();
     const adminEmail = (emailEl.value || "").trim();
     if (!name || !adminEmail) return;
@@ -3008,7 +3008,7 @@ export function mount(root) {
         : `Created "${out.company.name}". ${adminEmail} already had an account — added as admin.`;
       nameEl.value = "";
       emailEl.value = "";
-      loadTractCompanies();
+      loadTrakCompanies();
     } catch (e) {
       status.textContent = `Failed: ${e.message}`;
     } finally {
@@ -3016,12 +3016,12 @@ export function mount(root) {
     }
   }
 
-  async function handleTractRowClick(ev) {
+  async function handleTrakRowClick(ev) {
     const tr = ev.target.closest("tr[data-company-id]");
     if (!tr) return;
     const companyId = tr.getAttribute("data-company-id");
 
-    if (ev.target.classList.contains("js-tract-add-admin")) {
+    if (ev.target.classList.contains("js-trak-add-admin")) {
       const email = prompt("Admin email to add:");
       if (!email) return;
       ev.target.disabled = true;
@@ -3042,7 +3042,7 @@ export function mount(root) {
               ? "Invite sent."
               : "Existing account added as admin.";
         showBanner(note, "");
-        loadTractCompanies();
+        loadTrakCompanies();
       } catch (e) {
         showBanner(`Add admin failed: ${e.message}`, "err");
       } finally {
@@ -3051,7 +3051,7 @@ export function mount(root) {
       return;
     }
 
-    if (ev.target.classList.contains("js-tract-toggle")) {
+    if (ev.target.classList.contains("js-trak-toggle")) {
       const action = ev.target.getAttribute("data-action");
       if (
         action === "deactivate" &&
@@ -3064,7 +3064,7 @@ export function mount(root) {
           apiUrl(`/api/internal/companies/${companyId}/${action}`),
           { method: "POST" }
         );
-        loadTractCompanies();
+        loadTrakCompanies();
       } catch (e) {
         ev.target.disabled = false;
         showBanner(`${action} failed: ${e.message}`, "err");
@@ -3073,11 +3073,11 @@ export function mount(root) {
   }
 
   root
-    .querySelector("#tract-create-form")
+    .querySelector("#trak-create-form")
     .addEventListener("submit", doCreateCompany);
   root
-    .querySelector("#tract-companies-body")
-    .addEventListener("click", handleTractRowClick);
+    .querySelector("#trak-companies-body")
+    .addEventListener("click", handleTrakRowClick);
 
   async function doSignOut() {
     try {

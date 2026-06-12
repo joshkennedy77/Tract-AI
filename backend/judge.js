@@ -1,5 +1,5 @@
 /**
- * Tract AEO judge: one OpenAI call per answer that returns structured JSON.
+ * Trak AEO judge: one OpenAI call per answer that returns structured JSON.
  * Fails open: on any error the caller gets a normalized "omitted" analysis
  * so the scan pipeline keeps going.
  */

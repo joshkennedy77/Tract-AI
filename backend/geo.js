@@ -1,5 +1,5 @@
 /**
- * Tract GEO (Generative Engine Optimization) scoring.
+ * Trak GEO (Generative Engine Optimization) scoring.
  *
  * computeGeoScore() composite (0–100):
  *   own-domain cited 30 + any citation 25 + avg authority 25 + cite+recommend 20.

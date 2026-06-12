@@ -2,17 +2,17 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 if (!process.env.SUPABASE_URL?.trim()) {
-  console.warn("Tract API: SUPABASE_URL is missing from .env");
+  console.warn("Trak API: SUPABASE_URL is missing from .env");
 } else if (process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
   console.log(
-    "Tract API: Supabase client will use service_role (RLS bypass on server — OK for path A)."
+    "Trak API: Supabase client will use service_role (RLS bypass on server — OK for path A)."
   );
 } else if (process.env.SUPABASE_ANON_KEY?.trim()) {
   console.warn(
-    "Tract API: SUPABASE_SERVICE_ROLE_KEY not set — using anon only. With RLS on, inserts often fail. Add service_role from Supabase → Project Settings → API."
+    "Trak API: SUPABASE_SERVICE_ROLE_KEY not set — using anon only. With RLS on, inserts often fail. Add service_role from Supabase → Project Settings → API."
   );
 } else {
-  console.warn("Tract API: No Supabase keys found in .env");
+  console.warn("Trak API: No Supabase keys found in .env");
 }
 
 const crypto = require("crypto");
@@ -139,7 +139,7 @@ app.use(
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "tract-api" });
+  res.json({ ok: true, service: "trak-api" });
 });
 
 app.get("/api/auth/me", requireUser, (req, res) => {
@@ -340,7 +340,7 @@ function buildGeoStatsForGroup(rows) {
   };
 }
 
-function computeTractScore(aeoScore, geoScore) {
+function computeTrakScore(aeoScore, geoScore) {
   const aeoOk = Number.isFinite(Number(aeoScore));
   const geoOk = Number.isFinite(Number(geoScore));
   if (!aeoOk && !geoOk) return null;
@@ -501,10 +501,10 @@ app.get("/api/stats", requireUser, requireCompany, async (req, res) => {
   const aeoPerBrand = aggregatePerBrand(rows, buildAeoStatsForGroup);
   const geoOverall = buildGeoStatsForGroup(rows);
   const geoPerBrand = aggregatePerBrand(rows, buildGeoStatsForGroup);
-  const tractOverall = computeTractScore(aeoOverall.score, geoOverall.score);
-  const tractPerBrand = {};
+  const trakOverall = computeTrakScore(aeoOverall.score, geoOverall.score);
+  const trakPerBrand = {};
   for (const brand of Object.keys(aeoPerBrand)) {
-    tractPerBrand[brand] = computeTractScore(
+    trakPerBrand[brand] = computeTrakScore(
       aeoPerBrand[brand]?.score,
       geoPerBrand[brand]?.score
     );
@@ -546,7 +546,7 @@ app.get("/api/stats", requireUser, requireCompany, async (req, res) => {
     sourcesByEngine,
     aeo: { overall: aeoOverall, byBrand: aeoPerBrand },
     geo: { overall: geoOverall, byBrand: geoPerBrand },
-    tractScore: { overall: tractOverall, byBrand: tractPerBrand },
+    trakScore: { overall: trakOverall, byBrand: trakPerBrand },
   });
 });
 
@@ -571,7 +571,7 @@ function sessionResultsToScoreRows(results, brandsOrder, at) {
   }));
 }
 
-function buildRecommendationsPayload(rows, brand, profile, aeoPerBrand, geoPerBrand, tractPerBrand) {
+function buildRecommendationsPayload(rows, brand, profile, aeoPerBrand, geoPerBrand, trakPerBrand) {
   const brandKey = Object.keys(aeoPerBrand).find(
     (b) => b.toLowerCase() === brand.toLowerCase()
   ) || brand;
@@ -580,7 +580,7 @@ function buildRecommendationsPayload(rows, brand, profile, aeoPerBrand, geoPerBr
   );
   const aeo = aeoPerBrand[brandKey] || aeoPerBrand[brand] || {};
   const geo = geoPerBrand[brandKey] || geoPerBrand[brand] || {};
-  const tractScore = tractPerBrand[brandKey] ?? tractPerBrand[brand] ?? null;
+  const trakScore = trakPerBrand[brandKey] ?? trakPerBrand[brand] ?? null;
 
   const competitorInsights = [];
   for (const comp of Object.keys(aeoPerBrand)) {
@@ -613,13 +613,13 @@ function buildRecommendationsPayload(rows, brand, profile, aeoPerBrand, geoPerBr
     profile,
     aeo,
     geo,
-    tractScore,
+    trakScore,
     competitorInsights,
   });
 
   return {
     brand,
-    tractScore,
+    trakScore,
     aeo: { score: aeo.score ?? null, judged: aeo.judged ?? 0, mix: aeo.mix },
     geo: {
       score: geo.score ?? null,
@@ -652,9 +652,9 @@ app.post("/api/recommendations", requireUser, requireCompany, async (req, res) =
       const rows = sessionResultsToScoreRows(body.results, brandsOrder, body.at);
       const aeoPerBrand = aggregatePerBrand(rows, buildAeoStatsForGroup);
       const geoPerBrand = aggregatePerBrand(rows, buildGeoStatsForGroup);
-      const tractPerBrand = {};
+      const trakPerBrand = {};
       for (const b of Object.keys(aeoPerBrand)) {
-        tractPerBrand[b] = computeTractScore(
+        trakPerBrand[b] = computeTrakScore(
           aeoPerBrand[b]?.score,
           geoPerBrand[b]?.score
         );
@@ -679,7 +679,7 @@ app.post("/api/recommendations", requireUser, requireCompany, async (req, res) =
           profile,
           aeoPerBrand,
           geoPerBrand,
-          tractPerBrand
+          trakPerBrand
         )
       );
     }
@@ -720,9 +720,9 @@ app.post("/api/recommendations", requireUser, requireCompany, async (req, res) =
 
     const aeoPerBrand = aggregatePerBrand(rows, buildAeoStatsForGroup);
     const geoPerBrand = aggregatePerBrand(rows, buildGeoStatsForGroup);
-    const tractPerBrand = {};
+    const trakPerBrand = {};
     for (const b of Object.keys(aeoPerBrand)) {
-      tractPerBrand[b] = computeTractScore(
+      trakPerBrand[b] = computeTrakScore(
         aeoPerBrand[b]?.score,
         geoPerBrand[b]?.score
       );
@@ -749,7 +749,7 @@ app.post("/api/recommendations", requireUser, requireCompany, async (req, res) =
         profile,
         aeoPerBrand,
         geoPerBrand,
-        tractPerBrand
+        trakPerBrand
       )
     );
   } catch (e) {
@@ -1212,7 +1212,7 @@ app.delete(
 );
 
 // ---------------------------------------------------------------------------
-// Tract internal: companies dashboard (PR-3)
+// Trak internal: companies dashboard (PR-3)
 // ---------------------------------------------------------------------------
 
 function slugify(name) {
@@ -1435,7 +1435,7 @@ const HOST =
   process.env.HOST ||
   (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
 const server = app.listen(PORT, HOST, () => {
-  console.log(`Tract API listening at http://${HOST}:${PORT}`);
+  console.log(`Trak API listening at http://${HOST}:${PORT}`);
   console.log(
     `Persist scans to Supabase: ${PERSIST_SCANS ? "ON" : "OFF"} (set PERSIST_SCANS=true to save rows)`
   );

@@ -154,7 +154,7 @@ function competitorInsights(brand, allRows, aeoByBrand, geoByBrand) {
  * @param {object} [input.profile] — { domains, facts }
  * @param {object} [input.aeo] — per-brand AEO stats from buildAeoStatsForGroup
  * @param {object} [input.geo] — per-brand GEO stats
- * @param {number|null} [input.tractScore]
+ * @param {number|null} [input.trakScore]
  */
 function generateRecommendations(input) {
   const brand = String(input.brand || "").trim();
@@ -162,7 +162,7 @@ function generateRecommendations(input) {
   const profile = input.profile || {};
   const aeo = input.aeo || {};
   const geo = input.geo || {};
-  const tractScore = input.tractScore ?? null;
+  const trakScore = input.trakScore ?? null;
   const domains = Array.isArray(profile.domains) ? profile.domains : [];
   const domainLabel = domains.length ? domains.join(", ") : `${brand.toLowerCase().replace(/[^a-z0-9]+/g, "")}.com (guessed)`;
 
@@ -172,7 +172,7 @@ function generateRecommendations(input) {
   if (rows.length === 0) {
     push(recs, {
       id: "no-data",
-      area: "tract",
+      area: "trak",
       severity: "info",
       title: "Run an audit to get recommendations",
       evidence: `No scan data for ${brand || "your brand"} yet.`,
@@ -187,7 +187,7 @@ function generateRecommendations(input) {
   if (!domains.length && !String(profile.facts || "").trim()) {
     push(recs, {
       id: "profile-missing",
-      area: "tract",
+      area: "trak",
       severity: "info",
       title: "Add your brand profile for sharper advice",
       evidence: "Owned domains and verified facts are not set for this brand.",
@@ -429,7 +429,7 @@ function generateRecommendations(input) {
   for (const c of comps.slice(0, 2)) {
     push(recs, {
       id: `comp-${c.competitor}-${c.metric}`.toLowerCase().replace(/\s+/g, "-"),
-      area: "tract",
+      area: "trak",
       severity: "info",
       title: `${c.competitor} leads on ${c.metric}`,
       evidence: `${c.competitor}: ${c.theirs}/100 vs ${brand}: ${c.yours}/100.`,
@@ -471,10 +471,10 @@ function generateRecommendations(input) {
   if (recs.length === 0) {
     push(recs, {
       id: "all-good",
-      area: "tract",
+      area: "trak",
       severity: "info",
       title: "Strong baseline — keep monitoring",
-      evidence: `AEO ${aeo.score ?? "—"}/100 · GEO ${geo.score ?? "—"}/100 · Tract ${tractScore ?? "—"}/100.`,
+      evidence: `AEO ${aeo.score ?? "—"}/100 · GEO ${geo.score ?? "—"}/100 · Trak ${trakScore ?? "—"}/100.`,
       actions: [
         "Re-run audits monthly to catch engine or intent drift.",
         "Expand prompt coverage in Prompts as your category evolves.",

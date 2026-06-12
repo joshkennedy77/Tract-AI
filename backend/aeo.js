@@ -1,5 +1,5 @@
 /**
- * Tract AEO (Answer Engine Optimization) scoring.
+ * Trak AEO (Answer Engine Optimization) scoring.
  *
  * computeAeoScore() composite (0–100):
  *   recommendation 40 + position 20 + mention_type 15 + accuracy 25.
